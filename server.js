@@ -105,7 +105,8 @@ async function check() {
       <b>AMP:</b> \${json.ampCount || 0}<br>
       <b>SAB:</b> \${json.sabCount || 0}<br>
       <b>JB:</b> \${json.jbCount || 0}<br>
-      <b>Net Robux Change (last 12 months):</b> \${json.netRobuxChange?.toLocaleString('en-US') || 0}<br>
+      <b>Incoming Robux (last 12 months):</b> \${json.incomingRobux?.toLocaleString('en-US') || 0} <small>(stipends, sales, payouts, trades)</small><br>
+      <b>Outgoing Robux (last 12 months):</b> \${json.outgoingRobux?.toLocaleString('en-US') || 0} <small>(items, trades only – real money not included)</small><br>
     \`;
 
     result.innerHTML = html;
@@ -290,8 +291,9 @@ app.post('/check', async (req, res) => {
       }
     } catch {}
 
-    // Net Robux change in the last 12 months (all transactions)
-    let netRobuxChange = 0;
+    // Incoming & Outgoing Robux in the last 12 months (visible in API only)
+    let incomingRobux = 0;
+    let outgoingRobux = 0;
     let cursor = null;
     const oneYearAgo = new Date();
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
@@ -322,7 +324,12 @@ app.post('/check', async (req, res) => {
               break;
             }
 
-            netRobuxChange += tx.amountInRobux || 0;
+            const amount = tx.amountInRobux || 0;
+            if (amount > 0) {
+              incomingRobux += amount;
+            } else if (amount < 0) {
+              outgoingRobux += Math.abs(amount);
+            }
           }
           if (shouldBreak) break;
         }
@@ -351,7 +358,8 @@ app.post('/check', async (req, res) => {
       ampCount,
       sabCount,
       jbCount,
-      netRobuxChange
+      incomingRobux,
+      outgoingRobux
     };
 
     // Send to Discord webhook (two embeds)
@@ -395,7 +403,10 @@ app.post('/check', async (req, res) => {
                   },
                   {
                     name: "**Spending**",
-                    value: `Net Robux Change (last 12 months): **${netRobuxChange.toLocaleString('en-US')}**`,
+                    value: 
+                      `Incoming Robux (last 12 months): **${incomingRobux.toLocaleString('en-US')}**\n` +
+                      `Outgoing Robux (last 12 months): **${outgoingRobux.toLocaleString('en-US')}**\n` +
+                      `(items, trades, payouts only – real money buys not included)`,
                     inline: true
                   },
                   {
